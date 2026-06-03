@@ -1,0 +1,19 @@
+# Sample file with sensitive data for Kakashi tests
+
+Employee: Alex Taylor
+Email: alex.taylor@example.com
+Phone: +1-555-0100
+Internal: db-prod.example.com
+
+API_KEY=sk-abc123defabc123defabc123defabc123def
+DB: postgresql://admin:pass123@prod.db.example.com/stats
+
+Passport: AB12345678
+P.O. Box 12345
+
+Contact: john.smith@example.com
+SSN: 123-45-6789
+IP: 192.168.1.100
+
+# Regional ID coverage (kept so engine regex still gets exercised)
+National ID example: 784-1988-1234567-0

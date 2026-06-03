@@ -1,0 +1,68 @@
+{
+  "name": "@muhammadatef/kakashi",
+  "version": "1.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Hide secrets, credentials, and personal data before they leave your machine — works in Claude Code, Cursor, Codex, and 20+ AI agents. 50+ file formats including PDF, Word, Excel, JSON, .env.",
+  "author": "Mohamed Atef Fahmy <muhamedfahmy7474@gmail.com> (https://github.com/Muhammadatef)",
+  "license": "MIT",
+  "homepage": "https://github.com/Muhammadatef/kakashi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Muhammadatef/kakashi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Muhammadatef/kakashi/issues"
+  },
+  "bin": {
+    "kakashi": "bin/kakashi.js",
+    "k": "bin/kakashi.js"
+  },
+  "scripts": {
+    "install-agents": "node bin/install.js",
+    "test": "node tests/run.js"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5",
+    "jszip": "^3.10.1",
+    "pdf-parse": "^1.1.1",
+    "commander": "^11.0.0",
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1",
+    "glob": "^10.3.10"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "privacy",
+    "data-masking",
+    "secrets",
+    "pii",
+    "redaction",
+    "kakashi",
+    "claude-code",
+    "cursor",
+    "codex",
+    "skill",
+    "agent",
+    "cli",
+    "naruto"
+  ],
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "commands",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "INSTALL.md",
+    "LICENSE",
+    "README.md",
+    "logo-256.png",
+    "logo-64.png",
+    "install.sh",
+    "install.ps1"
+  ]
+}

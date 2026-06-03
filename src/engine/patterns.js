@@ -1,0 +1,328 @@
+const NAME_STOPLIST = new Set([
+  'the', 'of', 'in', 'for', 'a', 'an', 'and', 'or', 'to', 'from', 'with',
+  'by', 'at', 'on', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare',
+  'ought', 'used', 'not', 'no', 'nor', 'but', 'if', 'then', 'else',
+  'when', 'where', 'why', 'how', 'all', 'each', 'every', 'both', 'few',
+  'more', 'most', 'other', 'some', 'such', 'than', 'too', 'very', 'just',
+  'don', 'now', 'only', 'own', 'same', 'so', 'also', 'as', 'it', 'its',
+  'this', 'that', 'these', 'those', 'he', 'she', 'they', 'we', 'you',
+  'his', 'her', 'their', 'our', 'your', 'my', 'me', 'him', 'them', 'us',
+  'who', 'whom', 'which', 'what', 'whose', 'new', 'old', 'first', 'last',
+  'next', 'previous', 'total', 'sum', 'count', 'value', 'data', 'report',
+  'table', 'column', 'row', 'field', 'name', 'type', 'date', 'time',
+  'year', 'month', 'day', 'number', 'id', 'code', 'status', 'state',
+]);
+
+const BASE_PATTERNS = [
+  // ID & Documents
+  //
+  // The labels here are intentionally global ("National ID", "International
+  // Phone", "Visa Number"). Each individual regex below currently matches a
+  // SPECIFIC format -- we mark the format in a comment next to the regex.
+  // v1.1 will broaden each pattern to cover more national formats (US SSN
+  // already lives under `ssn` in the PII bucket; UK NINO, EU ID cards,
+  // Indian Aadhaar, etc. are tracked in the v1.1 roadmap).
+  {
+    id: 'national_id',
+    label: 'National ID',
+    cat: 'id',
+    // Currently matches UAE Emirates ID format: 784-YYYY-NNNNNNN-D.
+    // v1.1: add additional national ID formats (CA SIN, AU TFN, IN Aadhaar, etc.).
+    rx: /\b784-\d{4}-\d{7}-\d\b/g,
+    fakeValues: ['784-1990-9999999-0', '784-1985-1234567-1'],
+  },
+  {
+    id: 'intl_phone',
+    label: 'International Phone',
+    cat: 'id',
+    // Currently matches +971 / 00971 / 971-prefixed and the matching local
+    // 0(5x|2|3|4|6|7|9)... layout. The generic `phone` pattern in the PII
+    // bucket already catches international numbers with explicit separators
+    // (e.g. +1-415-555-0188, +44-20-7946-0521). This pattern is kept to
+    // catch unspaced regional formats that the strict `phone` regex misses.
+    rx: /(?:\+971|00971|971)[\s.-]?(?:5[0-9]|2|3|4|6|7|9)[\s.-]?\d{3}[\s.-]?\d{4}\b|\b0(?:5[0-9]|2|3|4|6|7|9)[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
+    fakeValues: ['+971501234567', '0501234567'],
+  },
+  {
+    id: 'passport',
+    label: 'Passport',
+    cat: 'id',
+    // International passport formats: 2 letters + 6-9 digits, or P + letter + 7-8 digits.
+    // Catches the common ICAO-style passport numbers used by most countries.
+    rx: /\b(?:[A-Z]{2}\d{6,9}|P[A-Z]\d{7,8})\b/g,
+    fakeValues: ['MO1234567', 'AB12345678'],
+  },
+  {
+    id: 'visa_id',
+    label: 'Visa Number',
+    cat: 'id',
+    // Currently matches NNN/YYYY/NNNNNNN format (e.g. residence visa numbers).
+    // v1.1: add US visa (single letter + 8 digits), Schengen, etc.
+    rx: /\b\d{3}\/\d{4}\/\d{7}\b/g,
+    fakeValues: ['201/2024/1234567'],
+  },
+  {
+    id: 'trade_lic',
+    label: 'Trade License',
+    cat: 'id',
+    // Currently matches DED/CN/TL-prefixed business license numbers.
+    // v1.1: add UK companies house, US EIN, EU VAT IDs, etc.
+    rx: /\b(?:DED|CN|TL)-[A-Z0-9]{4,10}\b/gi,
+    fakeValues: ['DED-123456', 'CN-789012'],
+  },
+  {
+    id: 'pobox',
+    label: 'P.O. Box',
+    cat: 'id',
+    // International P.O. Box format. Catches "P.O. Box NNNN" / "PO Box NNNN".
+    rx: /\bP\.?\s*O\.?\s*Box\s+\d{1,6}\b/gi,
+    fakeValues: ['P.O. Box 12345'],
+  },
+  {
+    id: 'non_latin_name',
+    label: 'Non-Latin Name',
+    cat: 'id',
+    // Currently matches Arabic-script names (two or more whitespace-separated
+    // Arabic words). v1.1: extend to Cyrillic, Hebrew, CJK, Devanagari.
+    rx: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+(?:\s+[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+)+/g,
+    fakeValues: ['محمد أحمد', 'فاطمة علي'],
+  },
+  {
+    id: 'unified_id',
+    label: 'Unified ID',
+    cat: 'id',
+    // Currently matches 15-digit unified identifiers starting with "10"
+    // (e.g. UAE UID). v1.1: add other unified-ID schemes (e.g. Singapore NRIC).
+    rx: /\b10\d{13}\b/g,
+    fakeValues: ['101234567890123'],
+  },
+  // PII
+  {
+    id: 'email',
+    label: 'Email',
+    cat: 'pii',
+    rx: /\b[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}\b/g,
+    fakeValues: ['user_a@example.com', 'user_b@example.org'],
+  },
+  {
+    id: 'phone',
+    label: 'Phone',
+    cat: 'pii',
+    // Require explicit separators so we don't grab 8-digit substrings out of
+    // tokens / cluster IDs / hostnames. Three accepted shapes:
+    //   intl:   +1-415-555-0188   +44 20 7946 0521   +91-22-2493-1234
+    //   parens: (415) 555-0188
+    //   us:     415-555-0188      415.555.0188       415 555 0188
+    rx: /(?:\+\d{1,3}[\s.-]\d{1,4}[\s.-]\d{2,4}[\s.-]\d{3,4}|\(\d{2,4}\)\s*\d{3}[\s.-]\d{4}|\b\d{3}[\s.-]\d{3}[\s.-]\d{4})\b/g,
+    validate: (match, text, idx) => {
+      const digits = match.replace(/\D/g, '');
+      if (digits.length < 9 || digits.length > 15) return false;
+      if (/^971/.test(digits)) return false; // covered by uae_phone
+      // Reject when embedded in a longer alphanumeric/digit-hyphen sequence
+      // (e.g. inside "acme-prod-9842" or "0125-123456-abcd1234")
+      const before = text.slice(Math.max(0, idx - 1), idx);
+      const after = text.slice(idx + match.length, idx + match.length + 1);
+      if (/[A-Za-z0-9]/.test(before) || /[A-Za-z0-9]/.test(after)) return false;
+      return true;
+    },
+    fakeValues: ['+1-555-555-0100', '+44 20 7946 0958'],
+  },
+  {
+    id: 'ip',
+    label: 'IP Address',
+    cat: 'pii',
+    rx: /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\b/g,
+    fakeValues: ['192.168.1.1', '10.0.0.1'],
+  },
+  {
+    id: 'cc',
+    label: 'Credit Card',
+    cat: 'pii',
+    // Visa/MC/Discover (4-4-4-4) | Amex (4-6-5) | continuous 13-19 digits
+    rx: /\b(?:\d{4}[\s-]?){3}\d{4}\b|\b\d{4}[\s-]\d{6}[\s-]\d{5}\b|\b\d{13,19}\b/g,
+    validate: (match) => {
+      const digits = match.replace(/\D/g, '');
+      return digits.length >= 13 && digits.length <= 19;
+    },
+    fakeValues: ['4111-1111-1111-1111'],
+  },
+  {
+    id: 'ssn',
+    label: 'SSN / National ID',
+    cat: 'pii',
+    rx: /\b\d{3}-\d{2}-\d{4}\b/g,
+    fakeValues: ['123-45-6789'],
+  },
+  {
+    id: 'dob',
+    label: 'Date of Birth',
+    cat: 'pii',
+    rx: /(?:date\s*of\s*birth|dob|birth\s*date|born\s*on)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/gi,
+    fakeValues: ['01/01/1990'],
+  },
+  {
+    id: 'date',
+    label: 'Date',
+    cat: 'pii',
+    rx: /\b(?:0?[1-9]|[12]\d|3[01])[\/\-](?:0?[1-9]|1[0-2])[\/\-](?:19|20)\d{2}\b|\b(?:0?[1-9]|1[0-2])[\/\-](?:0?[1-9]|[12]\d|3[01])[\/\-](?:19|20)\d{2}\b/g,
+    fakeValues: ['15/03/2024'],
+  },
+  {
+    id: 'age',
+    label: 'Age',
+    cat: 'pii',
+    rx: /\b(?:age|aged)[:\s]+\d{1,3}\b/gi,
+    fakeValues: ['age: 34'],
+  },
+  {
+    id: 'full_name',
+    label: 'Full Name',
+    cat: 'pii',
+    rx: /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g,
+    validate: (match) => {
+      const words = match.split(/\s+/);
+      return words.every((w) => !NAME_STOPLIST.has(w.toLowerCase()));
+    },
+    fakeValues: ['John Smith', 'Jane Doe'],
+  },
+  // Credentials
+  {
+    id: 'jwt',
+    label: 'JWT Token',
+    cat: 'cred',
+    rx: /\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
+    fakeValues: ['eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'],
+  },
+  {
+    id: 'ssh_key',
+    label: 'SSH Private Key',
+    cat: 'cred',
+    rx: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
+    fakeValues: ['-----BEGIN PRIVATE KEY-----\n[REDACTED]\n-----END PRIVATE KEY-----'],
+  },
+  {
+    id: 'aws_key',
+    label: 'AWS Key',
+    cat: 'cred',
+    rx: /\b(?:AKIA|ASIA|AROA)[A-Z0-9]{12,16}\b/g,
+    fakeValues: ['AKIAIOSFODNN7EXAMPLE'],
+  },
+  {
+    id: 'openai_key',
+    label: 'OpenAI Key',
+    cat: 'cred',
+    // Covers legacy sk-... and current sk-proj-* / sk-svcacct-* / sk-admin-*
+    rx: /\bsk-(?:proj-|svcacct-|admin-|None-)?[A-Za-z0-9_-]{20,}\b/g,
+    // Don't double-match Anthropic keys (they start with sk-ant-)
+    validate: (match) => !/^sk-ant-/.test(match),
+    fakeValues: ['sk-proj-abc123def456ghi789jkl012mno345pqr678'],
+  },
+  {
+    id: 'anthropic',
+    label: 'Anthropic Key',
+    cat: 'cred',
+    rx: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
+    fakeValues: ['sk-ant-api03-abc123def456'],
+  },
+  {
+    id: 'hf_token',
+    label: 'HuggingFace Token',
+    cat: 'cred',
+    rx: /\bhf_[A-Za-z0-9]{20,}\b/g,
+    fakeValues: ['hf_abc123def456ghi789'],
+  },
+  {
+    id: 'gh_token',
+    label: 'GitHub Token',
+    cat: 'cred',
+    rx: /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
+    fakeValues: ['ghp_abc123def456ghi789jkl012'],
+  },
+  {
+    id: 'slack',
+    label: 'Slack Token',
+    cat: 'cred',
+    rx: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
+    fakeValues: ['xoxb-1234567890-1234567890123-abc123def456'],
+  },
+  {
+    id: 'stripe',
+    label: 'Stripe Key',
+    cat: 'cred',
+    rx: /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{20,}\b/g,
+    fakeValues: ['sk_live_abc123def456ghi789'],
+  },
+  {
+    id: 'bearer',
+    label: 'Bearer Token',
+    cat: 'cred',
+    rx: /\bBearer\s+[A-Za-z0-9._\-+/=]{20,}\b/gi,
+    fakeValues: ['Bearer abc123def456ghi789'],
+  },
+  {
+    id: 'db_conn',
+    label: 'Database Connection',
+    cat: 'cred',
+    // Standard:  postgresql://user:pass@host/db
+    // JDBC:      jdbc:databricks://host:443/path  (sub-protocol after jdbc:)
+    rx: /\b(?:postgresql|postgres|mysql|mongodb(?:\+srv)?|redis|mssql|sqlite|oracle):\/\/[^\s"'<>]+|\bjdbc:[a-z]+:\/\/[^\s"'<>]+|\bjdbc:\/\/[^\s"'<>]+/gi,
+    fakeValues: ['postgresql://user:pass@localhost:5432/db'],
+  },
+  {
+    id: 'databricks_token',
+    label: 'Databricks Token',
+    cat: 'cred',
+    rx: /\bdapi[a-fA-F0-9]{32,}(?:-\d+)?\b/g,
+    fakeValues: ['dapi1234567890abcdef1234567890abcdef'],
+  },
+  {
+    id: 'databricks_host',
+    label: 'Databricks Host',
+    cat: 'cred',
+    rx: /\bhttps?:\/\/[A-Za-z0-9-]+\.(?:cloud\.databricks\.com|azuredatabricks\.net|gcp\.databricks\.com)[^\s"'<>]*/gi,
+    fakeValues: ['https://example.cloud.databricks.com'],
+  },
+  {
+    id: 's3_uri',
+    label: 'S3 URI',
+    cat: 'cred',
+    rx: /\bs3:\/\/[A-Za-z0-9._\-]+(?:\/[^\s"'<>]*)?/g,
+    fakeValues: ['s3://example-bucket/path'],
+  },
+  {
+    id: 'env_secret',
+    label: 'Env Secret',
+    cat: 'cred',
+    // Match KEY=VALUE assignments where KEY contains any sensitive substring,
+    // covering shell .env (`KEY=value`) and source-code styles
+    // (`KEY = "value"`, `KEY: 'value'`). Lookbehind avoids consuming the
+    // leading newline that previously collapsed adjacent lines.
+    rx: /(?<=^|[\s,;({\[])([A-Za-z_][\w.-]*(?:PASSWORD|PASSWD|PWD|SECRET|TOKEN|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?KEY|SECRET[_-]?KEY|CREDENTIAL|HOST|BUCKET|SIGNATURE|HMAC|DSN|WEBHOOK)[\w.-]*)\s*[:=]\s*(?:"([^"\n]+)"|'([^'\n]+)'|([^\s\n#,;)\]}]+))/gim,
+    fakeValues: ['API_KEY=sk-fake123'],
+  },
+  {
+    id: 'hex_secret',
+    label: 'Hex Secret',
+    cat: 'cred',
+    rx: /\b[a-fA-F0-9]{40,}\b/g,
+    validate: (match) => /[a-fA-F]/.test(match),
+    fakeValues: ['a1b2c3d4e5f6789012345678901234567890abcd'],
+  },
+];
+
+const PATTERNS = [...BASE_PATTERNS];
+
+const ID_PATTERNS = PATTERNS.filter((p) => p.cat === 'id');
+const PII_PATTERNS = PATTERNS.filter((p) => p.cat === 'pii');
+const CRED_PATTERNS = PATTERNS.filter((p) => p.cat === 'cred');
+
+module.exports = {
+  PATTERNS,
+  BASE_PATTERNS,
+  ID_PATTERNS,
+  PII_PATTERNS,
+  CRED_PATTERNS,
+  NAME_STOPLIST,
+};
