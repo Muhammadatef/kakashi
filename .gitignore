@@ -33,5 +33,3 @@ Thumbs.db
 *.log
 logs/
 
-# Internal launch draft -- kept locally, not pushed to the public repo
-LINKEDIN.md
