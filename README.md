@@ -66,9 +66,6 @@ admin@example.com
 
 **They just traveled to a third-party server. In plaintext. With no undo.**
 
-GitLeaks won't catch it — it only scans git history.<br/>
-TruffleHog won't catch it — it runs in CI, after the damage.<br/>
-Your IDE won't catch it — it has no idea what "sensitive" means.
 
 ---
 
