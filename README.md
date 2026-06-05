@@ -335,6 +335,7 @@ HuggingFace        hf_aBcDeFgHiJ...       →  [HF_TOKEN_1]
 JWT Token          eyJhbGciOiJIUzI1...    →  [JWT_1]
 Bearer Token       Bearer eyJhbGci...     →  [BEARER_1]
 DB Connection      postgresql://user:p... →  [DB_CONN_1]
+SQL Password       IDENTIFIED BY 'S3cr... →  IDENTIFIED BY [SQL_PASSWORD_1]
 SSH Private Key    -----BEGIN RSA...      →  [SSH_KEY_1]
 ENV Secret         API_KEY=abc123...      →  [ENV_SECRET_1]
 Hex Secret         a1b2c3d4e5f6... (40+)  →  [HEX_SECRET_1]
@@ -448,6 +449,28 @@ $ codex "fix the auth bug in src/middleware/auth.py"
 + API_KEY = "[OPENAI_KEY_1]"
 + ADMIN_EMAIL = "[EMAIL_1]"
 ```
+
+### SQL file
+
+SQL auth clauses delimit the secret with a space (`IDENTIFIED BY '...'`,
+`WITH PASSWORD '...'`), so Kakashi masks just the value and leaves the
+statement readable — perfect for asking an agent to optimize a query or
+review a schema without leaking credentials or customer records.
+
+```diff
+- CREATE USER reporting IDENTIFIED BY 'Sup3rS3cret!';
+- CREATE ROLE etl_worker WITH PASSWORD 'pg-r0le-pass';
+- INSERT INTO customers (id, full_name, email) VALUES
+-   (1, 'John Smith', 'john.smith@example.com');
++ CREATE USER reporting IDENTIFIED BY [SQL_PASSWORD_1];
++ CREATE ROLE etl_worker WITH PASSWORD [SQL_PASSWORD_2];
++ INSERT INTO customers (id, full_name, email) VALUES
++   (1, '[FULL_NAME_1]', '[EMAIL_1]');
+```
+
+> Need a **runnable** file with synthetic data (e.g. to seed a dev database)?
+> Use `--mode fake` — it substitutes realistic stand-ins like
+> `IDENTIFIED BY 'P@ssw0rd!'` instead of `[SQL_PASSWORD_1]`, keeping the SQL valid.
 
 ---
 

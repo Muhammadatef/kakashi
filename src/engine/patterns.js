@@ -271,6 +271,24 @@ const BASE_PATTERNS = [
     fakeValues: ['postgresql://user:pass@localhost:5432/db'],
   },
   {
+    id: 'sql_password',
+    label: 'SQL Password',
+    cat: 'cred',
+    // SQL DDL auth clauses that delimit the secret with a SPACE (not `=`), so
+    // the `env_secret` pattern (which requires `[:=]`) never sees them:
+    //   CREATE USER app IDENTIFIED BY 'S3cret!';                  -- Oracle / MySQL
+    //   CREATE ROLE app WITH PASSWORD 'S3cret!';                  -- PostgreSQL
+    //   CREATE USER app IDENTIFIED WITH mysql_native_password BY 'S3cret!';  -- MySQL 8
+    //   ALTER USER app IDENTIFIED BY PASSWORD '*HASH...';         -- MySQL legacy hash
+    //   ... ENCRYPTED BY 'keymaterial'                            -- Oracle TDE
+    // We anchor on the keyword via lookbehind and mask ONLY the quoted value,
+    // leaving the surrounding statement readable. The `=` forms
+    // (e.g. SQL Server `WITH PASSWORD = '...'`, ADO `Password=...;`) are
+    // intentionally left to `env_secret` so the two patterns never overlap.
+    rx: /(?<=\b(?:IDENTIFIED(?:\s+WITH\s+[\w.]+)?\s+BY|PASSWORD|ENCRYPTED\s+BY)\s+(?:PASSWORD\s+)?)(?:'[^'\n]*'|"[^"\n]*"|`[^`\n]*`)/gi,
+    fakeValues: ["'P@ssw0rd!'"],
+  },
+  {
     id: 'databricks_token',
     label: 'Databricks Token',
     cat: 'cred',

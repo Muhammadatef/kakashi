@@ -44,6 +44,15 @@ const cases = [
   // Common false positives that MUST NOT trigger env_secret
   { id: 'env_secret', input: 'PASSED = true', shouldMatch: false },
   { id: 'env_secret', input: 'AUTHOR_NAME = "Alice"', shouldMatch: false },
+  // SQL DDL auth clauses (space-delimited — env_secret can't see these)
+  { id: 'sql_password', input: "CREATE USER app IDENTIFIED BY 'S3cret!';", shouldMatch: true },
+  { id: 'sql_password', input: "CREATE ROLE app WITH PASSWORD 'S3cret!';", shouldMatch: true },
+  { id: 'sql_password', input: "CREATE USER app IDENTIFIED WITH mysql_native_password BY 'S3cret!';", shouldMatch: true },
+  { id: 'sql_password', input: "ALTER USER app IDENTIFIED BY PASSWORD '*A1B2C3';", shouldMatch: true },
+  { id: 'sql_password', input: 'ALTER USER app IDENTIFIED BY "double quoted";', shouldMatch: true },
+  // The `=` form belongs to env_secret, NOT sql_password (no overlap)
+  { id: 'sql_password', input: "ALTER LOGIN app WITH PASSWORD = 'S3cret!';", shouldMatch: false },
+  { id: 'sql_password', input: 'SELECT name FROM users;', shouldMatch: false },
 ];
 
 function runPatternTests() {

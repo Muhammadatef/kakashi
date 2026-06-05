@@ -54,6 +54,15 @@ function runMaskerTests() {
     assert(findings[0].line === 2);
   });
 
+  check('sql_password masks value but keeps the statement readable', () => {
+    const sql = "CREATE USER app IDENTIFIED BY 'S3cret!';";
+    const { masked, findings } = maskText(sql, { enabled: ['sql_password'] });
+    assert(findings.length === 1, 'expected exactly one finding');
+    assert(masked.includes('CREATE USER app IDENTIFIED BY '), 'keyword/context dropped');
+    assert(masked.includes('[SQL_PASSWORD_1]'), 'token not inserted');
+    assert(!masked.includes('S3cret!'), 'secret leaked');
+  });
+
   console.log(`masker.test.js: ${passed} passed, ${failed} failed`);
   return failed === 0;
 }
