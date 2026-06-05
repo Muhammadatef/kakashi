@@ -52,6 +52,23 @@ function runCliTests() {
     if (r.status !== 0) throw new Error('list-patterns failed');
   });
 
+  check('masks a .sql file end-to-end', () => {
+    const sqlFixture = path.join(__dirname, 'fixtures', 'sample_schema.sql');
+    const sqlMasked = path.join(__dirname, 'fixtures', 'masked_sample_schema.sql');
+    if (fs.existsSync(sqlMasked)) fs.unlinkSync(sqlMasked);
+    const r = runCli(['mask', sqlFixture, '-o', sqlMasked]);
+    if (r.status !== 0) throw new Error(`mask failed: ${r.stderr}`);
+    const content = fs.readFileSync(sqlMasked, 'utf8');
+    // SQL DDL password (space-delimited) must be masked, statement kept readable
+    if (content.includes('Sup3rS3cret!')) throw new Error('SQL password not masked');
+    if (content.includes('pg-r0le-pass')) throw new Error('PG role password not masked');
+    if (!content.includes('IDENTIFIED BY [SQL_PASSWORD')) throw new Error('SQL statement context lost');
+    // PII inside INSERT rows and the connection string in the comment too
+    if (content.includes('john.smith@example.com')) throw new Error('email in INSERT not masked');
+    if (content.includes('hunter2@prod.db.example.com')) throw new Error('conn string not masked');
+    fs.unlinkSync(sqlMasked);
+  });
+
   console.log(`cli.test.js: ${passed} passed, ${failed} failed`);
   return failed === 0;
 }
