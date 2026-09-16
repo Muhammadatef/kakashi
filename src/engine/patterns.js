@@ -119,7 +119,7 @@ const BASE_PATTERNS = [
     cat: 'id',
     // Matches UAE mobile (+971 5x…) and UAE landline (+971 2/3/4/6/7/9) in
     // international, national-with-country-code (00971), or local (0X) forms.
-    rx: /(?:\+971|00971|971)[\s.-]?(?:5[0-9]|2|3|4|6|7|9)[\s.-]?\d{3}[\s.-]?\d{4}\b|\b0(?:5[0-9]|2|3|4|6|7|9)[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
+    rx: /(?:\+971|00971|971)[ \t.-]?(?:5[0-9]|2|3|4|6|7|9)[ \t.-]?\d{3}[ \t.-]?\d{4}\b|\b0(?:5[0-9]|2|3|4|6|7|9)[ \t.-]?\d{3}[ \t.-]?\d{4}\b/g,
     fakeValues: ['+971501234567', '0501234567'],
   },
   {
@@ -155,7 +155,7 @@ const BASE_PATTERNS = [
     label: 'P.O. Box',
     labelAr: 'صندوق بريد',
     cat: 'id',
-    rx: /\bP\.?\s*O\.?\s*Box\s+\d{1,6}\b/gi,
+    rx: /\bP\.?[ \t]*O\.?[ \t]*Box[ \t]+\d{1,6}\b/gi,
     fakeValues: ['P.O. Box 12345'],
   },
   {
@@ -165,7 +165,7 @@ const BASE_PATTERNS = [
     cat: 'id',
     // Two or more whitespace-separated Arabic-script tokens.
     // v1.2: extend to Cyrillic, Hebrew, CJK, Devanagari.
-    rx: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+(?:\s+[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+)+/g,
+    rx: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+(?:[ \t]+[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+)+/g,
     fakeValues: ['محمد أحمد', 'فاطمة علي'],
   },
   {
@@ -184,7 +184,7 @@ const BASE_PATTERNS = [
     cat: 'id',
     // UAE IBAN: AE + 2 check digits + 3-digit bank + 16-digit account = 23 chars.
     // Format tolerates optional spaces every 4 chars (bank-statement style).
-    rx: /\bAE\d{2}(?:\s?\d{4}){4}\s?\d{3}\b|\bAE\d{21}\b/g,
+    rx: /\bAE\d{2}(?:[ \t]?\d{4}){4}[ \t]?\d{3}\b|\bAE\d{21}\b/g,
     fakeValues: ['AE070331234567890123456'],
     // Strict-mode reporters may additionally call isValidIban(match).
   },
@@ -207,7 +207,7 @@ const BASE_PATTERNS = [
     //   intl:   +1-415-555-0188   +44 20 7946 0521   +91-22-2493-1234
     //   parens: (415) 555-0188
     //   us:     415-555-0188      415.555.0188       415 555 0188
-    rx: /(?:\+\d{1,3}[\s.-]\d{1,4}[\s.-]\d{2,4}[\s.-]\d{3,4}|\(\d{2,4}\)\s*\d{3}[\s.-]\d{4}|\b\d{3}[\s.-]\d{3}[\s.-]\d{4})\b/g,
+    rx: /(?:\+\d{1,3}[ \t.-]\d{1,4}[ \t.-]\d{2,4}[ \t.-]\d{3,4}|\(\d{2,4}\)[ \t]*\d{3}[ \t.-]\d{4}|\b\d{3}[ \t.-]\d{3}[ \t.-]\d{4})\b/g,
     validate: (match, text, idx) => {
       const digits = match.replace(/\D/g, '');
       if (digits.length < 9 || digits.length > 15) return false;
@@ -235,7 +235,7 @@ const BASE_PATTERNS = [
     labelAr: 'بطاقة ائتمان',
     cat: 'pii',
     // Visa/MC/Discover (4-4-4-4) | Amex (4-6-5) | continuous 13-19 digits
-    rx: /\b(?:\d{4}[\s-]?){3}\d{4}\b|\b\d{4}[\s-]\d{6}[\s-]\d{5}\b|\b\d{13,19}\b/g,
+    rx: /\b(?:\d{4}[ \t-]?){3}\d{4}\b|\b\d{4}[ \t-]\d{6}[ \t-]\d{5}\b|\b\d{13,19}\b/g,
     validate: (match) => {
       const digits = match.replace(/\D/g, '');
       return digits.length >= 13 && digits.length <= 19;
@@ -255,7 +255,7 @@ const BASE_PATTERNS = [
     label: 'Date of Birth',
     labelAr: 'تاريخ الميلاد',
     cat: 'pii',
-    rx: /(?:date\s*of\s*birth|dob|birth\s*date|born\s*on)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/gi,
+    rx: /(?:date[ \t]*of[ \t]*birth|dob|birth[ \t]*date|born[ \t]*on)[: \t]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/gi,
     fakeValues: ['01/01/1990'],
   },
   {
@@ -271,7 +271,7 @@ const BASE_PATTERNS = [
     label: 'Age',
     labelAr: 'العمر',
     cat: 'pii',
-    rx: /\b(?:age|aged)[:\s]+\d{1,3}\b/gi,
+    rx: /\b(?:age|aged)[: \t]+\d{1,3}\b/gi,
     fakeValues: ['age: 34'],
   },
   {
@@ -279,7 +279,7 @@ const BASE_PATTERNS = [
     label: 'Full Name',
     labelAr: 'الاسم الكامل',
     cat: 'pii',
-    rx: /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g,
+    rx: /\b[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)+\b/g,
     validate: (match) => {
       const words = match.split(/\s+/);
       return words.every((w) => !NAME_STOPLIST.has(w.toLowerCase()));
@@ -328,7 +328,7 @@ const BASE_PATTERNS = [
     labelAr: 'مفتاح Anthropic',
     cat: 'cred',
     rx: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
-    fakeValues: ['sk-ant-api03-abc123def456'],
+    fakeValues: ['sk-ant-api03-abc123def456ghi789jkl012mno'],
   },
   {
     id: 'hf_token',
@@ -336,7 +336,7 @@ const BASE_PATTERNS = [
     labelAr: 'رمز HuggingFace',
     cat: 'cred',
     rx: /\bhf_[A-Za-z0-9]{20,}\b/g,
-    fakeValues: ['hf_abc123def456ghi789'],
+    fakeValues: ['hf_abc123def456ghi789jkl012mno345'],
   },
   {
     id: 'gh_token',
@@ -360,15 +360,15 @@ const BASE_PATTERNS = [
     labelAr: 'مفتاح Stripe',
     cat: 'cred',
     rx: /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{20,}\b/g,
-    fakeValues: ['sk_live_abc123def456ghi789'],
+    fakeValues: ['sk_test_EXAMPLEplaceholderNOTAREALKEY'],
   },
   {
     id: 'bearer',
     label: 'Bearer Token',
     labelAr: 'رمز Bearer',
     cat: 'cred',
-    rx: /\bBearer\s+[A-Za-z0-9._\-+/=]{20,}\b/gi,
-    fakeValues: ['Bearer abc123def456ghi789'],
+    rx: /\bBearer[ \t]+[A-Za-z0-9._\-+/=]{20,}\b/gi,
+    fakeValues: ['Bearer abc123def456ghi789jkl012mno345'],
   },
   {
     id: 'db_conn',
@@ -431,8 +431,35 @@ const BASE_PATTERNS = [
     // covering shell .env (`KEY=value`) and source-code styles
     // (`KEY = "value"`, `KEY: 'value'`). Lookbehind avoids consuming the
     // leading newline that previously collapsed adjacent lines.
-    rx: /(?<=^|[\s,;({\[])([A-Za-z_][\w.-]*(?:PASSWORD|PASSWD|PWD|SECRET|TOKEN|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?KEY|SECRET[_-]?KEY|CREDENTIAL|HOST|BUCKET|SIGNATURE|HMAC|DSN|WEBHOOK)[\w.-]*)\s*[:=]\s*(?:"([^"\n]+)"|'([^'\n]+)'|([^\s\n#,;)\]}]+))/gim,
-    fakeValues: ['API_KEY=sk-fake123'],
+    // The prefix before the keyword is OPTIONAL. It used to be mandatory
+    // (`[A-Za-z_][\w.-]*` with no `?`), which meant the most common forms in a
+    // real .env file were silently missed — `PASSWORD=`, `API_KEY=`, `TOKEN=`,
+    // `SECRET=` all failed while `DB_PASSWORD=` matched. The pattern's own
+    // fakeValue (`API_KEY=sk-fake123`) was itself undetectable.
+    rx: /(?<=^|[\s,;({\[])((?:[A-Za-z_][\w.-]*)?(?:PASSWORD|PASSWD|PWD|SECRET|TOKEN|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?KEY|SECRET[_-]?KEY|CREDENTIAL|HOST|BUCKET|SIGNATURE|HMAC|DSN|WEBHOOK)[\w.-]*)[ \t]*[:=][ \t]*(?:"([^"\n]+)"|'([^'\n]+)'|([^\s\n#,;)\]}]+))/gim,
+    // Keys that contain a trigger word but never hold a secret. Kept short and
+    // specific on purpose: for a DLP tool, over-masking a benign value is a
+    // nuisance while missing a real `TOKEN=` is a breach, so the default leans
+    // toward detection and this list stays an explicit, auditable exception.
+    validate: (match) => {
+      const key = match.split(/[:=]/)[0].trim();
+      if (/^(?:[\w.-]*_)?TOKENIZ(?:E|ER|ERS|ATION)$/i.test(key)) return false;
+      // Never re-detect a token this masker already emitted. Now that only the
+      // VALUE is replaced, `API_KEY=[OPENAI_KEY_1]` still looks like KEY=value
+      // -- so without this, masking stopped being idempotent and the Guardian's
+      // verifier could never converge (it re-scans its own output and would
+      // escalate forever, ending in BLOCK).
+      const value = match.slice(match.search(/[:=]/) + 1).trim().replace(/^["']|["']$/g, '');
+      return !/^\[[A-Z0-9_]*\]?$/.test(value);
+    },
+    // Replace the VALUE only (group 2 double-quoted, 3 single-quoted, 4 bare),
+    // never the whole `KEY=value`. Masking the key name too turned
+    // `OPENAI_API_KEY=sk-...` into a bare `[ENV_SECRET_1]`, which destroys the
+    // one piece of context an agent needs to reason about the file -- and it
+    // shadowed the specific credential patterns, so the `[OPENAI_KEY_1]` token
+    // this project's own README advertises could never actually appear.
+    // Narrowing the span also lets a more specific pattern win the overlap.
+    valueGroups: [2, 3, 4],
   },
   {
     id: 'hex_secret',

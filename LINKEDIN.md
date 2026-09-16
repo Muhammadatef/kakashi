@@ -79,6 +79,82 @@ the agent-guard MCP integration path. AMA below.
 
 ---
 
+## Post option V1.1-B — scan-dir + audit (the enterprise governance angle)
+
+> **Best for:** posting after the sovereign-privacy launch, when you want to
+> engage the CIO / DPO / procurement audience specifically. Attach a
+> screenshot of the `scan-dir` HTML report (bilingual EN/AR) as the hero image.
+
+---
+
+Yesterday I pointed Kakashi v1.1 at a real UAE analytics project. Six files. 2.3 seconds. 150 findings. Every one mapped to a specific article of Federal Decree-Law No. 45 of 2021 (UAE PDPL).
+
+```
+Total findings:    150
+By category:       35 ID & docs · 74 personal info · 41 credentials
+By severity:       70 critical · 43 high · 37 medium
+
+Top PDPL articles cited:
+  Art. 1  Definitions of Personal Data          →  109
+  Art. 22 Cross-Border Transfer                 →   76
+  Art. 5  Conditions for Processing             →   73
+  Art. 20 Security of Personal Data             →   70
+  Art. 21 Reporting a Personal Data Breach      →   41
+```
+
+That's not a spreadsheet a developer built by hand. That's what `kakashi scan-dir` emits by default.
+
+Three new enterprise-governance capabilities in v1.1:
+
+📁 **`kakashi scan-dir <path>`** — recursive privacy scan of any repository, shared drive, or S3-mounted bucket. Respects `.gitignore` and `.kakashiignore`. Concurrent workers scale to 100k-file trees. Four output formats: JSON (for SIEM), HTML (for auditors), Markdown (for GitHub PR comments), text (for CLI).
+
+🇦🇪 **PDPL-native reporting.** Every finding cites the specific UAE PDPL article that governs it. Nine articles catalogued: Art. 1 (Personal Data), 5 (Processing), 6 (Consent), 9 (Data Subject Rights), 15 (Sensitive Data), 20 (Security), 21 (Breach Notification), 22 (Cross-Border Transfer), 25 (DPO Duties). The HTML report renders bilingual English/Arabic with RTL preservation — a Data Protection Officer can read it in either language, hand it to the UAE Data Office as audit evidence, and no human has to re-map anything.
+
+🔍 **`kakashi audit`** — for when a regulator asks "prove it." Prints the full original→token mapping per finding. Deliberately verbose, deliberately documented as such. Trust *and* verify.
+
+**Zero cloud.** All processing is in-process on the user's machine. Zero telemetry. Zero network calls during scan or audit. The report contains no raw secret values — you get counts and severities, and only `audit` (invoked explicitly) shows the plaintext.
+
+`npm install -g @muhammadatef/kakashi` — v1.1.0 is live.
+
+MIT licence. 110 automated tests. npm provenance-signed. Made in the UAE.
+
+If you're a UAE ministry, bank, hospital, insurer, or agency running an AI programme, I would genuinely like to pilot this with your team — DM me. First-time contributors are welcome on the repo too.
+
+#UAEAIAward #AgenticAI #Privacy #PDPL #Compliance #DataProtection #OpenSource #MadeInTheUAE
+
+---
+
+### First-comment template for this variant
+
+```
+📁 scan-dir demo run (150 findings in 2.3 s on a real project):
+https://github.com/Muhammadatef/kakashi/blob/main/docs/TECHNICAL_IMPLEMENTATION.pdf
+
+📊 Every finding mapped to a PDPL article — DPO / audit-ready output:
+https://github.com/Muhammadatef/kakashi/blob/main/src/lib/pdpl-mapping.js
+
+🇦🇪 Arabic README + bilingual reports:
+https://github.com/Muhammadatef/kakashi/blob/main/README.ar.md
+
+📄 Full technical brief (16-page A4 PDF):
+https://github.com/Muhammadatef/kakashi/blob/main/docs/TECHNICAL_IMPLEMENTATION.pdf
+
+Open to demos / pilots with any UAE-regulated organisation. AMA below.
+```
+
+### Screenshot to attach (the hero image)
+
+Run this and screenshot the browser view of the resulting HTML — the
+bilingual PDPL-cited report is the single most compelling visual asset
+Kakashi produces:
+
+```
+kakashi scan-dir ./your-project -f html --lang ar -o /tmp/audit.html
+open /tmp/audit.html    # or: xdg-open /tmp/audit.html
+```
+
+---
+
 ## Post option A — problem-first (original v1.0 launch)
 
 Every time a developer pastes a file into Cursor or Claude, they might be sending API keys, customer emails, and database passwords to an external server — without a single warning.

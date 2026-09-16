@@ -32,7 +32,7 @@ function renderJson(report) {
 // Markdown — for CLI or PR comments.
 // ---------------------------------------------------------------------------
 function renderMarkdown(report) {
-  const { summary, files, rootPath, scannedAt, durationMs } = report;
+  const { summary, files, rootPath, scannedAt, durationMs, skippedByIgnoreFile } = report;
   const lines = [];
   lines.push(`# Kakashi Compliance Report`);
   lines.push('');
@@ -40,6 +40,10 @@ function renderMarkdown(report) {
   lines.push(`**Scanned:** ${scannedAt}`);
   lines.push(`**Duration:** ${(durationMs / 1000).toFixed(2)}s`);
   lines.push(`**Files:** ${files.length}`);
+  // A clean report must never be confusable with one that simply did not look.
+  if (skippedByIgnoreFile > 0) {
+    lines.push(`**Not scanned:** ${skippedByIgnoreFile} file(s) excluded by \`.gitignore\` / \`.kakashiignore\` — re-run with \`--no-gitignore\` to include them. \`.env\` is gitignored in most repos.`);
+  }
   lines.push('');
   lines.push(`## Summary`);
   lines.push('');

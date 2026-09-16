@@ -6,6 +6,109 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Kakashi Guardian** (`kakashi guard <file>`) — an autonomous protection loop over the
+  existing engine. Where `mask` applies a fixed pipeline once, `guard` holds a goal,
+  observes the resource, assesses contextual risk (agent, destination, data class),
+  plans the *minimum necessary* protection, validates that plan against policy, executes
+  it, **re-scans its own output**, and replans with a stronger transform if the artifact
+  is still unsafe. Decisions: `ALLOW`, `ALLOW_WITH_TRANSFORMATION`, `REQUIRE_APPROVAL`,
+  `BLOCK`.
+- Agent trust profiles (7 existing integrations + `local_model` + conservative `unknown`
+  defaults) and destination-aware policy rules — Kakashi's first configuration layer.
+- Nine sensitivity classes mapped from all 35 detection patterns, with a drift guard so
+  a new pattern cannot ship unclassified.
+- Value-free decision audit events (`~/.kakashi/guardian-audit.jsonl`), asserted by test
+  to contain no raw secrets.
+- 41 new Guardian tests, plus 128 new detection- and coverage-correctness assertions
+  (279 total, all passing), including a new `tests/formats.test.js`.
+
+### Notes
+
+- No new runtime dependencies. No daemon, no server, no separate install step — the
+  Guardian ships inside the existing package and is reached through the existing CLI.
+  A test locks this: it fails if a dependency is added or the installer registry changes.
+- The Guardian itself changed nothing in the v1.1 engine, compliance or sidecar
+  layers; all 110 pre-existing assertions still pass unchanged. The pattern fixes
+  below are a separate, deliberate change to `engine/patterns.js` — see **Fixed**.
+
+### Fixed
+
+- **Names silently survived masking in spreadsheets.** Eleven patterns separated their
+  tokens with `\s`, which matches newlines. `engine/formats/xlsx.js` flattens every cell
+  into one newline-joined string for detection and writes back per cell, so a match
+  spanning cells (`"Dept\nAhmed Hassan"`) existed in no single cell and the write
+  silently did nothing — `kakashi mask` reported success while the names remained.
+  Separators are now `[ \t]`, so a match can never cross a line. This also removes the
+  matching false positive in prose, where `"Notes\n\nNothing"` read as a person's name
+  and masking replaced both non-sensitive words with one token. Affects `full_name`,
+  `non_latin_name`, `cc`, `uae_iban`, `intl_phone`, `phone`, `pobox`, `bearer`,
+  `dob`, `age` and `env_secret`. `ssh_key` is exempt — a PEM block is genuinely
+  multi-line. A structural test now fails if any future pattern reintroduces `\s`.
+- **A file literally named `.env` was unreadable.** `path.extname('.env')` returns `''`
+  — a leading dot marks a hidden file, not an extension — so `kakashi scan .env` failed
+  with *"Unsupported file format: .env"* while `demo.env` worked. The commonest secret
+  file in existence, and the one this project's own README leads with, could not be
+  scanned or masked. Dotfiles now resolve from the basename, covering `.env`,
+  `.env.local`, `.env.production` and `.gitignore`.
+- **Directory walks skipped most of the file types the engine supports.**
+  `SUPPORTED_EXTS` was a hand-maintained list of 17 while the text engine understood
+  101. The two drifted and the consequence was silent: `kakashi scan main.go` reported a
+  leaked key, but `mask-dir` and `scan-dir` never opened Go, Terraform, Rust, Java or
+  shell files — so a folder-level compliance report could read clean with live
+  credentials in `main.tf`. `SUPPORTED_EXTS` is now derived from the engine's own list,
+  with a test that fails if they diverge again. Directory walks also now match hidden
+  files (`dot`) and extensionless names like `Dockerfile` (case-insensitively).
+- **A compliance report could not be told apart from one that never looked.**
+  `scan-dir` honours `.gitignore` by default, and `.env` is gitignored in most repos, so
+  the report simply omitted it. The default is unchanged — it is deliberate, and
+  `--no-gitignore` overrides it — but the report and the terminal summary now state how
+  many files the ignore files excluded.
+- **`mask-dir --ext <one-extension>` never matched anything.** `*.{py}` is not a brace
+  expansion; glob reads it literally. A single extension is now emitted as `*.py`.
+- **`mask-dir` descended into subdirectories without `-r`.** commander leaves
+  `--recursive` undefined when the flag is absent, which reached a defaulted parameter.
+- **Masked database rows lost referential integrity.** `db-mask` masks one row per
+  `maskText()` call, and token state was per-call, so numbering restarted at `_1` on
+  every row: five distinct customers all became `[FULL_NAME_1]`, and `--mode fake` gave
+  every row the same synthetic person. Nothing leaked, but the output was useless for
+  the thing masking is *for* — an agent asked "how many distinct customers?" would
+  answer 1. `maskText` now accepts `valueMap`/`counters` so a caller can thread one
+  token space through a whole result set; same value → same token, different value →
+  different token. Callers that pass neither are unaffected.
+- **`env_secret` destroyed the variable name and shadowed every specific credential
+  pattern.** It matched `KEY=value` and replaced the whole span, so
+  `OPENAI_API_KEY=sk-proj-...` masked to a bare `[ENV_SECRET_1]` — losing the one piece
+  of context an agent needs to reason about the file. Because that wide match starts at
+  the key, earlier than the value, it also won overlap resolution against `openai_key`,
+  `stripe` and friends: the `[OPENAI_KEY_1]` token this README advertises could never
+  actually be produced. Patterns may now declare `valueGroups`, the capture groups
+  holding the secret itself; `env_secret` replaces only the value, quotes and key name
+  intact, and a more specific pattern wins the narrowed overlap. The README's `.env`,
+  Python and SQL before/after examples now reproduce byte-for-byte.
+- **Masking is idempotent again.** Narrowing `env_secret` to the value meant its own
+  output (`API_KEY=[OPENAI_KEY_1]`) still read as `KEY=value`, so a second pass "found"
+  a secret and the Guardian — which re-scans its own artifact — escalated until it gave
+  up and returned `BLOCK`. `env_secret` now refuses values that are already mask tokens.
+- **`env_secret` missed the commonest `.env` forms.** The key prefix before the trigger
+  word was mandatory, so `PASSWORD=`, `API_KEY=`, `TOKEN=` and `SECRET=` were all
+  undetected while `DB_PASSWORD=` matched; the pattern's own `fakeValue`
+  (`API_KEY=sk-fake123`) was itself undetectable. The prefix is now optional, with a
+  narrow stoplist so `TOKENIZER=bpe` does not fire.
+- **Four `--mode fake` substitutions scanned clean.** The `anthropic`, `hf_token`,
+  `stripe` and `bearer` fake values were 18 characters where their own pattern
+  requires 20+, so masking produced a key-shaped string that no longer detected as one —
+  a re-scan (and the Guardian's verifier) would call such a file safe. A test now asserts
+  every `fakeValues` entry is still detectable by the full detector. `env_secret` drops
+  its `fakeValues` instead of lengthening it: any self-detecting `KEY=value` fake would
+  re-trigger its own pattern on every re-scan, so it falls back to the generic
+  `fake_env_secret`, which no pattern matches.
+
+---
+
 ## [1.1.0] — 2026-09-16
 
 The **sovereign-privacy release**. Ships everything needed to run Kakashi at

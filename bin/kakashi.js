@@ -179,14 +179,24 @@ program
       console.error(chalk.red(`Error: Directory not found: ${directory}`));
       process.exit(2);
     }
-    const exts = options.ext
-      ? options.ext.split(',').map((e) => e.trim().replace(/^\./, ''))
-      : formats.SUPPORTED_EXTS;
-    const pattern = options.recursive
-      ? `**/*.{${exts.join(',')}}`
-      : `*.{${exts.join(',')}}`;
+    // An explicit --ext narrows to exactly those extensions (and drops the
+    // extensionless names); otherwise walk everything the engine can read.
+    // Boolean() matters: commander leaves --recursive undefined when absent,
+    // which would otherwise pick up globPatterns' default.
+    const recursive = Boolean(options.recursive);
+    const pattern = options.ext
+      ? formats.globPatterns(
+        recursive,
+        options.ext.split(',').map((e) => e.trim().replace(/^\./, '')).filter(Boolean),
+        false,
+      )
+      : formats.globPatterns(recursive);
     const ignore = options.exclude ? options.exclude.split(',').map((s) => s.trim()) : ['**/node_modules/**', '**/masked_*'];
-    const files = await glob(pattern, { cwd: directory, absolute: true, ignore, nodir: true });
+    // dot: true -- without it glob skips every hidden file, so `.env` (the
+    // commonest secret file there is) was never even offered to the masker.
+    const files = await glob(pattern, {
+      cwd: directory, absolute: true, ignore, nodir: true, dot: true, nocase: true,
+    });
     if (files.length === 0) {
       console.log(chalk.yellow('No matching files found.'));
       process.exit(0);
@@ -396,7 +406,14 @@ program
     console.error(chalk.white(`   ${report.files.length} file(s) · ${s.total} finding(s)`));
     console.error(chalk.gray(`   (${s.byCategory.id} ID & docs · ${s.byCategory.pii} personal info · ${s.byCategory.cred} credentials)`));
     console.error(chalk.gray(`   Severity: ${s.bySeverity.critical} critical · ${s.bySeverity.high} high · ${s.bySeverity.medium} medium · ${s.bySeverity.low} low`));
-    console.error(chalk.gray(`   Duration: ${(report.durationMs / 1000).toFixed(2)}s\n`));
+    console.error(chalk.gray(`   Duration: ${(report.durationMs / 1000).toFixed(2)}s`));
+    if (report.skippedByIgnoreFile > 0) {
+      console.error(chalk.yellow(
+        `   Not scanned: ${report.skippedByIgnoreFile} file(s) excluded by .gitignore/.kakashiignore`
+        + ' — re-run with --no-gitignore to include them.',
+      ));
+    }
+    console.error('');
 
     let rendered;
     switch (options.format) {
@@ -416,6 +433,87 @@ program
       process.stdout.write(rendered);
     }
     process.exit(s.total > 0 ? 1 : 0);
+  });
+
+// ---------------------------------------------------------------------------
+// guard — the Guardian: an autonomous protection loop over the existing engine.
+//
+// Unlike `mask`, which applies a fixed pipeline once, `guard` holds a goal,
+// observes the resource, assesses contextual risk, plans a minimal protection,
+// checks that plan against policy, executes it, RE-SCANS its own output, and
+// replans if the result is still unsafe. Same engine underneath; the difference
+// is that it verifies its own work and can change its mind.
+//
+// Runs in-process. No daemon, no server, no extra install step.
+// ---------------------------------------------------------------------------
+program
+  .command('guard <file>')
+  .description('Autonomously protect a file for a specific agent, task and destination (observe → assess → plan → act → verify → replan)')
+  .option('-a, --agent <id>', 'Requesting agent: claude|cursor|codex|windsurf|cline|copilot|continue|local_model (default: unknown)', 'unknown')
+  .option('-t, --task <text>', 'What the agent is trying to accomplish (recorded and explained; never trusted as instruction)')
+  .option('-d, --destination <id>', 'local|local_model|known_external|external_model|unknown', 'external_model')
+  .option('-p, --policy <id>', 'Policy id', 'default')
+  .option('-o, --output <path>', 'Artifact path (default: guarded_<file>)')
+  .option('--approve <classes>', 'Comma-separated data classes a human approves for release (e.g. CREDENTIAL)')
+  .option('--max-iterations <n>', 'Replan budget before failing closed', '4')
+  .option('--audit-log <path>', 'Append the decision event here (default: ~/.kakashi/guardian-audit.jsonl)')
+  .option('--no-audit', 'Do not write an audit event')
+  .option('--json', 'Emit the machine-readable decision instead of the report (agent-safe: classes and counts only)')
+  .action(async (file, options) => {
+    const { runGuardian } = require('../src/guardian');
+    const { renderRun } = require('../src/guardian/render');
+
+    const maxIterations = parseInt(options.maxIterations, 10);
+    if (!Number.isInteger(maxIterations) || maxIterations < 1) {
+      console.error(chalk.red('Error: --max-iterations must be a positive integer'));
+      process.exit(2);
+    }
+
+    let result;
+    try {
+      result = await runGuardian({
+        resource: file,
+        agent: options.agent,
+        task: options.task,
+        destination: options.destination,
+        policy: options.policy,
+        output: options.output,
+        approvals: options.approve ? options.approve.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean) : [],
+        goal: { maxIterations },
+        auditLog: options.audit === false ? false : options.auditLog,
+      });
+    } catch (err) {
+      // Fail closed: no artifact was written and nothing was released.
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(2);
+    }
+
+    if (options.json) {
+      // The audit event is already value-free by construction, which makes it
+      // exactly the right payload to hand back to a calling agent.
+      console.log(JSON.stringify({
+        decision: result.decision,
+        reasonCode: result.reasonCode,
+        releasePath: result.releasePath,
+        risk: result.risk,
+        iterations: result.iterations,
+        verificationPassed: result.auditEvent.verificationPassed,
+        approvalsNeeded: result.approvalsNeeded,
+        event: result.auditEvent,
+      }, null, 2));
+    } else {
+      console.log(renderRun(result, result.state.context));
+    }
+
+    // Exit codes are decision-shaped so a CI job or a shelling-out agent can
+    // branch without parsing stdout. 2 stays "error", as everywhere else.
+    const EXIT = {
+      ALLOW: 0,
+      ALLOW_WITH_TRANSFORMATION: 0,
+      REQUIRE_APPROVAL: 3,
+      BLOCK: 4,
+    };
+    process.exit(EXIT[result.decision]);
   });
 
 // ---------------------------------------------------------------------------

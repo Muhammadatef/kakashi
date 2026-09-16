@@ -121,6 +121,150 @@ function runPatternTests() {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Line-boundary discipline.
+  //
+  // Patterns whose separator is intra-line whitespace must use `[ \t]`, never
+  // `\s`. `\s` matches newlines, which caused two real bugs:
+  //
+  //   1. In spreadsheets, engine/formats/xlsx.js flattens every cell into one
+  //      newline-joined string for detection and writes back per cell. A match
+  //      spanning cells ("Dept\nAhmed Hassan") exists in no single cell, so the
+  //      write silently did nothing and names survived masking entirely.
+  //   2. In prose, "Notes\n\nNothing" matched `full_name` and masking replaced
+  //      BOTH words with one token, destroying non-sensitive text.
+  //
+  // `ssh_key` is exempt: a PEM block is genuinely multi-line. Lookarounds are
+  // exempt too -- they are zero-width, so `\s` inside one can never make the
+  // MATCH itself span a line.
+  // -------------------------------------------------------------------------
+  const MULTILINE_BY_DESIGN = new Set(['ssh_key']);
+  for (const p of PATTERNS) {
+    if (MULTILINE_BY_DESIGN.has(p.id)) continue;
+    // Strip character classes that legitimately contain \s as a NEGATED
+    // terminator (e.g. [^\s"'<>]) and the env_secret leading lookbehind, which
+    // must allow a newline before a KEY.
+    const body = p.rx.source
+      .replace(/\[\^[^\]]*\]/g, '')            // negated classes: [^\s"'<>]
+      .replace(/\(\?<[=!][\s\S]*?\)(?=[^)]*$|[([])/g, '') // lookbehind
+      .replace(/\(\?<[=!](?:[^()]|\([^()]*\))*\)/g, '');  // nested lookbehind
+    if (/\\s/.test(body)) {
+      console.error(`FAIL ${p.id} uses \\s outside a negated class — it will match across lines`);
+      failed++;
+    } else {
+      passed++;
+    }
+  }
+
+  const lineBoundaryCases = [
+    // [name, text, patternId, shouldMatch]
+    ['full_name does not span a line break', 'Notes\n\nNothing interesting', 'full_name', false],
+    ['full_name still matches on one line', 'Contact Ahmed Hassan today', 'full_name', true],
+    ['full_name does not span spreadsheet cells', 'Dept\nAhmed Hassan', 'full_name', true],
+    ['arabic name does not span a line break', 'محمد\nأحمد', 'non_latin_name', false],
+    ['arabic name still matches on one line', 'محمد أحمد', 'non_latin_name', true],
+    ['credit card does not span cells', '4111\n1111\n1111\n1111', 'cc', false],
+    ['credit card still matches spaced on one line', '4111 1111 1111 1111', 'cc', true],
+    ['iban does not span cells', 'AE07\n0331\n2345\n6789\n0123456', 'uae_iban', false],
+    ['iban still matches spaced on one line', 'AE07 0331 2345 6789 0123 456', 'uae_iban', true],
+    ['uae phone does not span cells', '+971\n50 123 4567', 'intl_phone', false],
+    ['uae phone still matches on one line', '+971 50 123 4567', 'intl_phone', true],
+    ['po box does not span a line break', 'P.O.\nBox 12345', 'pobox', false],
+    ['po box still matches on one line', 'P.O. Box 12345', 'pobox', true],
+    ['bearer token does not span a line break', 'Bearer\nabc123def456ghi789jkl012', 'bearer', false],
+    ['bearer token still matches on one line', 'Bearer abc123def456ghi789jkl012', 'bearer', true],
+    ['env secret does not span a line break', 'API_KEY:\nsk-fake1234567890', 'env_secret', false],
+    ['env secret matches a bare key', 'API_KEY=sk-fake1234567890', 'env_secret', true],
+    ['env secret matches a prefixed key', 'DB_PASSWORD=hunter2', 'env_secret', true],
+    ['env secret matches a key after a newline', 'x=1\nAPI_KEY=sk-fake1234567890', 'env_secret', true],
+  ];
+  for (const [name, text, id, shouldMatch] of lineBoundaryCases) {
+    const { findings } = maskText(text, { enabled: [id] });
+    const got = findings.length > 0;
+    const spansLine = findings.some((f) => /[\r\n]/.test(f.original));
+    if (got === shouldMatch && !spansLine) {
+      passed++;
+    } else {
+      console.error(`FAIL ${name}: expected match=${shouldMatch}, got match=${got}`
+        + (spansLine ? ' (match spans a line break)' : ''));
+      failed++;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // env_secret used to require at least one character before the trigger word,
+  // so the commonest forms in a real .env file were silently missed: `PASSWORD=`,
+  // `API_KEY=`, `TOKEN=`, `SECRET=` all failed while `DB_PASSWORD=` matched.
+  // The pattern's own fakeValue was itself undetectable.
+  // -------------------------------------------------------------------------
+  const envSecretCases = [
+    ['API_KEY=sk-fake1234567890', true],
+    ['PASSWORD=hunter2', true],
+    ['TOKEN=abc123xyz789', true],
+    ['SECRET=s3cr3tvalue', true],
+    ['ACCESS_KEY=AKIA123456', true],
+    ['PRIVATE_KEY=abcdef', true],
+    ['CREDENTIAL=zzz', true],
+    ['DSN=postgres-dsn-value', true],
+    ['password: hunter2', true],
+    ['api_key = "abcdef"', true],
+    ['MY_API_KEY=sk-fake1234567890', true],
+    ['DB_PASSWORD=hunter2', true],
+    // must NOT fire
+    ['LOG_LEVEL=info', false],
+    ['REGION=me-central-1', false],
+    ['PASSWORDLESS_MODE', false],
+    ['# PASSWORD is required', false],
+    ['TOKENIZER=bpe', false],
+    ['HF_TOKENIZER=gpt2', false],
+  ];
+  for (const [text, shouldMatch] of envSecretCases) {
+    const { findings } = maskText(text, { enabled: ['env_secret'] });
+    if ((findings.length > 0) === shouldMatch) {
+      passed++;
+    } else {
+      console.error(`FAIL env_secret ${JSON.stringify(text)}: expected match=${shouldMatch}, got ${findings.length}`);
+      failed++;
+    }
+  }
+
+  // `--mode fake` substitutes values from `fakeValues`. Those substitutions must
+  // remain DETECTABLE by the full detector, because that is exactly what a
+  // re-scan (and the Guardian's verifier) relies on: a fake that no pattern
+  // recognises makes a still-sensitive-looking file report as clean.
+  //
+  // Four fakes used to be 18 characters where their own pattern demanded 20+,
+  // so `--mode fake` on an Anthropic/HuggingFace/Stripe/Bearer credential
+  // produced a key-shaped string that scanned clean.
+  const FAKE_EXEMPT = {
+    // A PEM body is deliberately inert -- the whole point is that it is no longer a key.
+    ssh_key: 'redaction is intentional',
+    // The match includes the surrounding SQL clause; the fake is only the quoted
+    // value, which is correct for substitution but not self-detecting.
+    sql_password: 'fake is the value only; the pattern needs its SQL context',
+  };
+  for (const p of PATTERNS) {
+    if (!p.fakeValues || FAKE_EXEMPT[p.id]) { passed++; continue; }
+    const undetectable = p.fakeValues.filter((v) => maskText(v).findings.length === 0);
+    if (undetectable.length === 0) {
+      passed++;
+    } else {
+      console.error(`FAIL ${p.id}: fakeValues undetectable by the full detector: ${JSON.stringify(undetectable)}`);
+      failed++;
+    }
+  }
+
+  // Masking must never destroy surrounding non-sensitive words.
+  {
+    const { masked } = maskText('Notes\n\nNothing interesting here.');
+    if (masked.includes('Notes') && masked.includes('Nothing')) {
+      passed++;
+    } else {
+      console.error(`FAIL masking destroyed non-sensitive prose: ${JSON.stringify(masked)}`);
+      failed++;
+    }
+  }
+
   console.log(`patterns.test.js: ${passed} passed, ${failed} failed`);
   return failed === 0;
 }

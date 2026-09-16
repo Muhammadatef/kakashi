@@ -26,11 +26,29 @@ const SPECIAL_FILENAMES = new Set([
   'gitignore', 'gitconfig', 'editorconfig',
 ]);
 
+/**
+ * Resolve the "extension" used to decide whether a file is maskable text.
+ *
+ * path.extname() is useless for dotfiles: it returns '' for `.env` and
+ * `.gitignore` (a leading dot marks a hidden file, not an extension) and
+ * '.local' for `.env.local`. That silently made the single most common secret
+ * file in existence -- `.env` -- report as "Unsupported file format", while
+ * `demo.env` worked fine. Dotfiles are resolved from the basename instead.
+ */
 function getExt(filePath) {
   const base = path.basename(filePath).toLowerCase();
   if (SPECIAL_FILENAMES.has(base)) return base;
-  const ext = path.extname(filePath).slice(1).toLowerCase();
-  return ext;
+
+  if (base.startsWith('.')) {
+    const stripped = base.slice(1);               // '.env' -> 'env'
+    if (SPECIAL_FILENAMES.has(stripped)) return stripped;   // '.gitignore'
+    if (CODE_EXTS.has(stripped)) return stripped;           // '.env'
+    const head = stripped.split('.')[0];          // '.env.production' -> 'env'
+    if (CODE_EXTS.has(head)) return head;
+    return '';
+  }
+
+  return path.extname(filePath).slice(1).toLowerCase();
 }
 
 function isTextFile(filePath) {
