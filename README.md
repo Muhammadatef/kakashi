@@ -142,8 +142,8 @@ curl -fsSL https://raw.githubusercontent.com/Muhammadatef/kakashi/main/install.s
 Kakashi runs locally; the LLM your agent talks to does not. That distinction matters for *how* you invoke the slash commands. Two rules:
 
 > **Rule 1 — pass a path, not an `@`-mention.**<br/>
-> Use: `/kakashi-scan /path/to/sample_data.csv`<br/>
-> Avoid: `/kakashi-scan @sample_date.csv`<br/>
+> Use: `/kakashi-scan /path/to/file.env`<br/>
+> Avoid: `/kakashi-scan @file.env`<br/>
 > In Cursor, Claude Code, and most agents, `@`-mentions automatically attach the **full file body** to the LLM's context *before* Kakashi runs. The secrets travel to the model on that very turn. Path-only invocation keeps the file body off the wire — Kakashi reads it locally and the agent only ever sees the path string and the masked summary.
 
 > **Rule 2 — `/kakashi-scan` is agent-safe by default; `/kakashi-audit` is verbose by design.**<br/>
