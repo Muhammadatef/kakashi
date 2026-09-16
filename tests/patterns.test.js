@@ -1,6 +1,11 @@
 const assert = require('assert');
 const { maskText } = require('../src/engine/masker');
-const { PATTERNS } = require('../src/engine/patterns');
+const {
+  PATTERNS,
+  luhnCheck,
+  isValidEmiratesId,
+  isValidIban,
+} = require('../src/engine/patterns');
 
 const cases = [
   { id: 'national_id', input: 'ID: 784-1988-1234567-0', shouldMatch: true },
@@ -8,6 +13,11 @@ const cases = [
   { id: 'intl_phone', input: '+971501234567', shouldMatch: true },
   { id: 'intl_phone', input: '971501234567', shouldMatch: true },
   { id: 'intl_phone', input: '0501234567', shouldMatch: true },
+  { id: 'intl_phone', input: '+971 4 555 1234', shouldMatch: true }, // UAE landline
+  { id: 'uae_iban', input: 'IBAN AE070331234567890123456', shouldMatch: true },
+  { id: 'uae_iban', input: 'IBAN AE07 0331 2345 6789 0123 456', shouldMatch: true },
+  { id: 'uae_iban', input: 'IBAN GB29NWBK60161331926819', shouldMatch: false }, // UK IBAN, not UAE
+  { id: 'non_latin_name', input: 'العميل محمد أحمد المنصوري', shouldMatch: true },
   { id: 'email', input: 'user@example.com', shouldMatch: true },
   { id: 'email', input: 'not an email', shouldMatch: false },
   { id: 'db_conn', input: 'postgresql://admin:pass123@prod.db.example.com/stats', shouldMatch: true },
@@ -79,6 +89,36 @@ function runPatternTests() {
   } else {
     console.error('FAIL overlap test');
     failed++;
+  }
+
+  // ---- Checksum helper tests (used by A5 PDPL reporter) -------------------
+  const checksumCases = [
+    // luhnCheck
+    { fn: 'luhnCheck', input: '4532015112830366', expected: true },   // valid Visa
+    { fn: 'luhnCheck', input: '4532015112830367', expected: false },  // off by one
+    { fn: 'luhnCheck', input: 'abc', expected: false },
+    // Emirates ID (Luhn on the 15 digits, prefix 784).
+    // Luhn(784-2017-9999999-X): sum(undoubled) = X+45; sum(doubled) = 49;
+    // total = X + 94 → check digit = 6 for validity.
+    { fn: 'isValidEmiratesId', input: '784-2017-9999999-6', expected: true },
+    { fn: 'isValidEmiratesId', input: '784-2017-9999999-3', expected: false },
+    { fn: 'isValidEmiratesId', input: 'not-an-id', expected: false },
+    { fn: 'isValidEmiratesId', input: '123-2017-9999999-6', expected: false }, // wrong prefix
+    // IBAN mod-97 (real spec test vectors)
+    { fn: 'isValidIban', input: 'GB82WEST12345698765432', expected: true },
+    { fn: 'isValidIban', input: 'DE89370400440532013000', expected: true },
+    { fn: 'isValidIban', input: 'GB82WEST12345698765433', expected: false },
+    { fn: 'isValidIban', input: 'not-an-iban', expected: false },
+  ];
+  const helpers = { luhnCheck, isValidEmiratesId, isValidIban };
+  for (const c of checksumCases) {
+    const result = helpers[c.fn](c.input);
+    if (result === c.expected) {
+      passed++;
+    } else {
+      console.error(`FAIL checksum ${c.fn}("${c.input}") expected ${c.expected} got ${result}`);
+      failed++;
+    }
   }
 
   console.log(`patterns.test.js: ${passed} passed, ${failed} failed`);

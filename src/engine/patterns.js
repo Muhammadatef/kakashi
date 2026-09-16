@@ -15,93 +15,184 @@ const NAME_STOPLIST = new Set([
   'year', 'month', 'day', 'number', 'id', 'code', 'status', 'state',
 ]);
 
+// ---------------------------------------------------------------------------
+// Checksum helpers
+//
+// These are exported as reusable primitives. They are NOT wired into the
+// pattern `validate` hooks by default because:
+//   (a) the existing test fixtures use synthetic IDs whose check digits are
+//       not real (e.g. 784-1988-1234567-0), and enabling strict validation
+//       would break those tests without adding real safety;
+//   (b) the compliance/reporter layer (A5, A2) uses these helpers to add a
+//       "checksum-verified" badge to each finding — that is the correct
+//       place for strict validation, not the pattern matcher which needs to
+//       stay lenient enough to flag suspect-looking IDs even when the check
+//       digit is wrong (attackers frequently transpose digits).
+// ---------------------------------------------------------------------------
+
+/**
+ * Luhn (ISO/IEC 7812-1) checksum for a digits-only string.
+ * @param {string} digits
+ * @returns {boolean}
+ */
+function luhnCheck(digits) {
+  if (typeof digits !== 'string' || digits.length === 0) return false;
+  let sum = 0;
+  let alt = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    const n = parseInt(digits[i], 10);
+    if (Number.isNaN(n)) return false;
+    let contrib = n;
+    if (alt) {
+      contrib = n * 2;
+      if (contrib > 9) contrib -= 9;
+    }
+    sum += contrib;
+    alt = !alt;
+  }
+  return sum % 10 === 0;
+}
+
+/**
+ * Emirates ID checksum verification.
+ * Emirates ID is 15 digits (784-YYYY-NNNNNNN-C) with a Luhn check digit.
+ * @param {string} id — may contain dashes or spaces
+ * @returns {boolean}
+ */
+function isValidEmiratesId(id) {
+  const digits = String(id || '').replace(/\D/g, '');
+  if (digits.length !== 15) return false;
+  if (!/^784/.test(digits)) return false;
+  return luhnCheck(digits);
+}
+
+/**
+ * IBAN mod-97 checksum (ISO 13616).
+ * @param {string} iban — spaces/case tolerated
+ * @returns {boolean}
+ */
+function isValidIban(iban) {
+  const clean = String(iban || '').replace(/\s+/g, '').toUpperCase();
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(clean)) return false;
+  // Rearrange: move first four chars to the end.
+  const rearranged = clean.slice(4) + clean.slice(0, 4);
+  // Convert letters to digits (A=10..Z=35).
+  const numeric = rearranged.replace(/[A-Z]/g, (c) => (c.charCodeAt(0) - 55).toString());
+  // Mod 97 via 7-digit chunks (keeps us out of BigInt land).
+  let remainder = 0;
+  for (let i = 0; i < numeric.length; i += 7) {
+    remainder = parseInt(String(remainder) + numeric.slice(i, i + 7), 10) % 97;
+  }
+  return remainder === 1;
+}
+
+// ---------------------------------------------------------------------------
+// Patterns
+//
+// Every pattern has:
+//   id        — stable key; used in token replacement `[<ID>_<n>]`
+//   label     — English display name (used in reports, verbose output)
+//   labelAr   — Arabic display name (used when LANG=ar* or --lang ar)
+//   cat       — 'id' | 'pii' | 'cred'
+//   rx        — regex to match
+//   validate  — optional predicate; return false to reject a match
+//   fakeValues — used by --mode fake
+// ---------------------------------------------------------------------------
+
 const BASE_PATTERNS = [
-  // ID & Documents
-  //
-  // The labels here are intentionally global ("National ID", "International
-  // Phone", "Visa Number"). Each individual regex below currently matches a
-  // SPECIFIC format -- we mark the format in a comment next to the regex.
-  // v1.1 will broaden each pattern to cover more national formats (US SSN
-  // already lives under `ssn` in the PII bucket; UK NINO, EU ID cards,
-  // Indian Aadhaar, etc. are tracked in the v1.1 roadmap).
+  // ---- ID & Documents ------------------------------------------------------
   {
     id: 'national_id',
-    label: 'National ID',
+    label: 'Emirates ID',
+    labelAr: 'الهوية الإماراتية',
     cat: 'id',
-    // Currently matches UAE Emirates ID format: 784-YYYY-NNNNNNN-D.
-    // v1.1: add additional national ID formats (CA SIN, AU TFN, IN Aadhaar, etc.).
+    // Emirates ID format: 784-YYYY-NNNNNNN-D.
+    // For compliance-strict deployments the reporter (A2/A5) can additionally
+    // apply `isValidEmiratesId(match)` to badge findings as checksum-verified.
     rx: /\b784-\d{4}-\d{7}-\d\b/g,
     fakeValues: ['784-1990-9999999-0', '784-1985-1234567-1'],
   },
   {
     id: 'intl_phone',
-    label: 'International Phone',
+    label: 'UAE Phone',
+    labelAr: 'هاتف إماراتي',
     cat: 'id',
-    // Currently matches +971 / 00971 / 971-prefixed and the matching local
-    // 0(5x|2|3|4|6|7|9)... layout. The generic `phone` pattern in the PII
-    // bucket already catches international numbers with explicit separators
-    // (e.g. +1-415-555-0188, +44-20-7946-0521). This pattern is kept to
-    // catch unspaced regional formats that the strict `phone` regex misses.
+    // Matches UAE mobile (+971 5x…) and UAE landline (+971 2/3/4/6/7/9) in
+    // international, national-with-country-code (00971), or local (0X) forms.
     rx: /(?:\+971|00971|971)[\s.-]?(?:5[0-9]|2|3|4|6|7|9)[\s.-]?\d{3}[\s.-]?\d{4}\b|\b0(?:5[0-9]|2|3|4|6|7|9)[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
     fakeValues: ['+971501234567', '0501234567'],
   },
   {
     id: 'passport',
     label: 'Passport',
+    labelAr: 'جواز سفر',
     cat: 'id',
-    // International passport formats: 2 letters + 6-9 digits, or P + letter + 7-8 digits.
-    // Catches the common ICAO-style passport numbers used by most countries.
+    // ICAO-style passport numbers: 2 letters + 6-9 digits, or P<letter> + 7-8 digits.
+    // Covers UAE, most EU, US, and Commonwealth passport formats.
     rx: /\b(?:[A-Z]{2}\d{6,9}|P[A-Z]\d{7,8})\b/g,
     fakeValues: ['MO1234567', 'AB12345678'],
   },
   {
     id: 'visa_id',
     label: 'Visa Number',
+    labelAr: 'رقم التأشيرة',
     cat: 'id',
-    // Currently matches NNN/YYYY/NNNNNNN format (e.g. residence visa numbers).
-    // v1.1: add US visa (single letter + 8 digits), Schengen, etc.
+    // UAE residence visa: NNN/YYYY/NNNNNNN.
     rx: /\b\d{3}\/\d{4}\/\d{7}\b/g,
     fakeValues: ['201/2024/1234567'],
   },
   {
     id: 'trade_lic',
     label: 'Trade License',
+    labelAr: 'رخصة تجارية',
     cat: 'id',
-    // Currently matches DED/CN/TL-prefixed business license numbers.
-    // v1.1: add UK companies house, US EIN, EU VAT IDs, etc.
+    // Dubai DED / commercial CN / TL-prefixed trade license numbers.
     rx: /\b(?:DED|CN|TL)-[A-Z0-9]{4,10}\b/gi,
     fakeValues: ['DED-123456', 'CN-789012'],
   },
   {
     id: 'pobox',
     label: 'P.O. Box',
+    labelAr: 'صندوق بريد',
     cat: 'id',
-    // International P.O. Box format. Catches "P.O. Box NNNN" / "PO Box NNNN".
     rx: /\bP\.?\s*O\.?\s*Box\s+\d{1,6}\b/gi,
     fakeValues: ['P.O. Box 12345'],
   },
   {
     id: 'non_latin_name',
-    label: 'Non-Latin Name',
+    label: 'Arabic Name',
+    labelAr: 'اسم عربي',
     cat: 'id',
-    // Currently matches Arabic-script names (two or more whitespace-separated
-    // Arabic words). v1.1: extend to Cyrillic, Hebrew, CJK, Devanagari.
+    // Two or more whitespace-separated Arabic-script tokens.
+    // v1.2: extend to Cyrillic, Hebrew, CJK, Devanagari.
     rx: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+(?:\s+[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+)+/g,
     fakeValues: ['محمد أحمد', 'فاطمة علي'],
   },
   {
     id: 'unified_id',
     label: 'Unified ID',
+    labelAr: 'الرقم الموحد',
     cat: 'id',
-    // Currently matches 15-digit unified identifiers starting with "10"
-    // (e.g. UAE UID). v1.1: add other unified-ID schemes (e.g. Singapore NRIC).
+    // 15-digit unified identifier (e.g. UAE UID starts with "10").
     rx: /\b10\d{13}\b/g,
     fakeValues: ['101234567890123'],
   },
-  // PII
+  {
+    id: 'uae_iban',
+    label: 'UAE IBAN',
+    labelAr: 'ايبان إماراتي',
+    cat: 'id',
+    // UAE IBAN: AE + 2 check digits + 3-digit bank + 16-digit account = 23 chars.
+    // Format tolerates optional spaces every 4 chars (bank-statement style).
+    rx: /\bAE\d{2}(?:\s?\d{4}){4}\s?\d{3}\b|\bAE\d{21}\b/g,
+    fakeValues: ['AE070331234567890123456'],
+    // Strict-mode reporters may additionally call isValidIban(match).
+  },
+  // ---- Personal Info -------------------------------------------------------
   {
     id: 'email',
     label: 'Email',
+    labelAr: 'بريد إلكتروني',
     cat: 'pii',
     rx: /\b[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}\b/g,
     fakeValues: ['user_a@example.com', 'user_b@example.org'],
@@ -109,6 +200,7 @@ const BASE_PATTERNS = [
   {
     id: 'phone',
     label: 'Phone',
+    labelAr: 'هاتف',
     cat: 'pii',
     // Require explicit separators so we don't grab 8-digit substrings out of
     // tokens / cluster IDs / hostnames. Three accepted shapes:
@@ -119,7 +211,7 @@ const BASE_PATTERNS = [
     validate: (match, text, idx) => {
       const digits = match.replace(/\D/g, '');
       if (digits.length < 9 || digits.length > 15) return false;
-      if (/^971/.test(digits)) return false; // covered by uae_phone
+      if (/^971/.test(digits)) return false; // covered by intl_phone (UAE)
       // Reject when embedded in a longer alphanumeric/digit-hyphen sequence
       // (e.g. inside "acme-prod-9842" or "0125-123456-abcd1234")
       const before = text.slice(Math.max(0, idx - 1), idx);
@@ -132,6 +224,7 @@ const BASE_PATTERNS = [
   {
     id: 'ip',
     label: 'IP Address',
+    labelAr: 'عنوان IP',
     cat: 'pii',
     rx: /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\b/g,
     fakeValues: ['192.168.1.1', '10.0.0.1'],
@@ -139,6 +232,7 @@ const BASE_PATTERNS = [
   {
     id: 'cc',
     label: 'Credit Card',
+    labelAr: 'بطاقة ائتمان',
     cat: 'pii',
     // Visa/MC/Discover (4-4-4-4) | Amex (4-6-5) | continuous 13-19 digits
     rx: /\b(?:\d{4}[\s-]?){3}\d{4}\b|\b\d{4}[\s-]\d{6}[\s-]\d{5}\b|\b\d{13,19}\b/g,
@@ -151,6 +245,7 @@ const BASE_PATTERNS = [
   {
     id: 'ssn',
     label: 'SSN / National ID',
+    labelAr: 'رقم الضمان الاجتماعي',
     cat: 'pii',
     rx: /\b\d{3}-\d{2}-\d{4}\b/g,
     fakeValues: ['123-45-6789'],
@@ -158,6 +253,7 @@ const BASE_PATTERNS = [
   {
     id: 'dob',
     label: 'Date of Birth',
+    labelAr: 'تاريخ الميلاد',
     cat: 'pii',
     rx: /(?:date\s*of\s*birth|dob|birth\s*date|born\s*on)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/gi,
     fakeValues: ['01/01/1990'],
@@ -165,6 +261,7 @@ const BASE_PATTERNS = [
   {
     id: 'date',
     label: 'Date',
+    labelAr: 'تاريخ',
     cat: 'pii',
     rx: /\b(?:0?[1-9]|[12]\d|3[01])[\/\-](?:0?[1-9]|1[0-2])[\/\-](?:19|20)\d{2}\b|\b(?:0?[1-9]|1[0-2])[\/\-](?:0?[1-9]|[12]\d|3[01])[\/\-](?:19|20)\d{2}\b/g,
     fakeValues: ['15/03/2024'],
@@ -172,6 +269,7 @@ const BASE_PATTERNS = [
   {
     id: 'age',
     label: 'Age',
+    labelAr: 'العمر',
     cat: 'pii',
     rx: /\b(?:age|aged)[:\s]+\d{1,3}\b/gi,
     fakeValues: ['age: 34'],
@@ -179,6 +277,7 @@ const BASE_PATTERNS = [
   {
     id: 'full_name',
     label: 'Full Name',
+    labelAr: 'الاسم الكامل',
     cat: 'pii',
     rx: /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g,
     validate: (match) => {
@@ -187,10 +286,11 @@ const BASE_PATTERNS = [
     },
     fakeValues: ['John Smith', 'Jane Doe'],
   },
-  // Credentials
+  // ---- Credentials ---------------------------------------------------------
   {
     id: 'jwt',
     label: 'JWT Token',
+    labelAr: 'رمز JWT',
     cat: 'cred',
     rx: /\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
     fakeValues: ['eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U'],
@@ -198,6 +298,7 @@ const BASE_PATTERNS = [
   {
     id: 'ssh_key',
     label: 'SSH Private Key',
+    labelAr: 'مفتاح SSH خاص',
     cat: 'cred',
     rx: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
     fakeValues: ['-----BEGIN PRIVATE KEY-----\n[REDACTED]\n-----END PRIVATE KEY-----'],
@@ -205,6 +306,7 @@ const BASE_PATTERNS = [
   {
     id: 'aws_key',
     label: 'AWS Key',
+    labelAr: 'مفتاح AWS',
     cat: 'cred',
     rx: /\b(?:AKIA|ASIA|AROA)[A-Z0-9]{12,16}\b/g,
     fakeValues: ['AKIAIOSFODNN7EXAMPLE'],
@@ -212,6 +314,7 @@ const BASE_PATTERNS = [
   {
     id: 'openai_key',
     label: 'OpenAI Key',
+    labelAr: 'مفتاح OpenAI',
     cat: 'cred',
     // Covers legacy sk-... and current sk-proj-* / sk-svcacct-* / sk-admin-*
     rx: /\bsk-(?:proj-|svcacct-|admin-|None-)?[A-Za-z0-9_-]{20,}\b/g,
@@ -222,6 +325,7 @@ const BASE_PATTERNS = [
   {
     id: 'anthropic',
     label: 'Anthropic Key',
+    labelAr: 'مفتاح Anthropic',
     cat: 'cred',
     rx: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
     fakeValues: ['sk-ant-api03-abc123def456'],
@@ -229,6 +333,7 @@ const BASE_PATTERNS = [
   {
     id: 'hf_token',
     label: 'HuggingFace Token',
+    labelAr: 'رمز HuggingFace',
     cat: 'cred',
     rx: /\bhf_[A-Za-z0-9]{20,}\b/g,
     fakeValues: ['hf_abc123def456ghi789'],
@@ -236,6 +341,7 @@ const BASE_PATTERNS = [
   {
     id: 'gh_token',
     label: 'GitHub Token',
+    labelAr: 'رمز GitHub',
     cat: 'cred',
     rx: /\bgh[pousr]_[A-Za-z0-9]{20,}\b/g,
     fakeValues: ['ghp_abc123def456ghi789jkl012'],
@@ -243,6 +349,7 @@ const BASE_PATTERNS = [
   {
     id: 'slack',
     label: 'Slack Token',
+    labelAr: 'رمز Slack',
     cat: 'cred',
     rx: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
     fakeValues: ['xoxb-1234567890-1234567890123-abc123def456'],
@@ -250,6 +357,7 @@ const BASE_PATTERNS = [
   {
     id: 'stripe',
     label: 'Stripe Key',
+    labelAr: 'مفتاح Stripe',
     cat: 'cred',
     rx: /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{20,}\b/g,
     fakeValues: ['sk_live_abc123def456ghi789'],
@@ -257,6 +365,7 @@ const BASE_PATTERNS = [
   {
     id: 'bearer',
     label: 'Bearer Token',
+    labelAr: 'رمز Bearer',
     cat: 'cred',
     rx: /\bBearer\s+[A-Za-z0-9._\-+/=]{20,}\b/gi,
     fakeValues: ['Bearer abc123def456ghi789'],
@@ -264,6 +373,7 @@ const BASE_PATTERNS = [
   {
     id: 'db_conn',
     label: 'Database Connection',
+    labelAr: 'اتصال قاعدة بيانات',
     cat: 'cred',
     // Standard:  postgresql://user:pass@host/db
     // JDBC:      jdbc:databricks://host:443/path  (sub-protocol after jdbc:)
@@ -291,6 +401,7 @@ const BASE_PATTERNS = [
   {
     id: 'databricks_token',
     label: 'Databricks Token',
+    labelAr: 'رمز Databricks',
     cat: 'cred',
     rx: /\bdapi[a-fA-F0-9]{32,}(?:-\d+)?\b/g,
     fakeValues: ['dapi1234567890abcdef1234567890abcdef'],
@@ -298,6 +409,7 @@ const BASE_PATTERNS = [
   {
     id: 'databricks_host',
     label: 'Databricks Host',
+    labelAr: 'مضيف Databricks',
     cat: 'cred',
     rx: /\bhttps?:\/\/[A-Za-z0-9-]+\.(?:cloud\.databricks\.com|azuredatabricks\.net|gcp\.databricks\.com)[^\s"'<>]*/gi,
     fakeValues: ['https://example.cloud.databricks.com'],
@@ -305,6 +417,7 @@ const BASE_PATTERNS = [
   {
     id: 's3_uri',
     label: 'S3 URI',
+    labelAr: 'رابط S3',
     cat: 'cred',
     rx: /\bs3:\/\/[A-Za-z0-9._\-]+(?:\/[^\s"'<>]*)?/g,
     fakeValues: ['s3://example-bucket/path'],
@@ -312,6 +425,7 @@ const BASE_PATTERNS = [
   {
     id: 'env_secret',
     label: 'Env Secret',
+    labelAr: 'سر بيئي',
     cat: 'cred',
     // Match KEY=VALUE assignments where KEY contains any sensitive substring,
     // covering shell .env (`KEY=value`) and source-code styles
@@ -323,6 +437,7 @@ const BASE_PATTERNS = [
   {
     id: 'hex_secret',
     label: 'Hex Secret',
+    labelAr: 'سر Hex',
     cat: 'cred',
     rx: /\b[a-fA-F0-9]{40,}\b/g,
     validate: (match) => /[a-fA-F]/.test(match),
@@ -343,4 +458,9 @@ module.exports = {
   PII_PATTERNS,
   CRED_PATTERNS,
   NAME_STOPLIST,
+  // Checksum helpers — used by the reporter (A2) and PDPL mapping (A5) to
+  // badge findings as "checksum-verified" without breaking pattern lenience.
+  luhnCheck,
+  isValidEmiratesId,
+  isValidIban,
 };

@@ -1,0 +1,11 @@
+id,first_name,last_name,email,phone,date_of_birth,address,city,country,national_id
+1,John,Smith,john.smith@example.com,+1-555-100-1001,1990-03-15,"123 Oak Street",New York,USA,US12345678
+2,Emma,Johnson,emma.johnson@example.com,+1-555-100-1002,1988-07-22,"456 Pine Avenue",Chicago,USA,US23456789
+3,Michael,Williams,michael.williams@example.com,+1-555-100-1003,1992-11-05,"789 Maple Drive",Dallas,USA,US34567890
+4,Olivia,Brown,olivia.brown@example.com,+1-555-100-1004,1995-01-18,"321 Cedar Road",Seattle,USA,US45678901
+5,William,Jones,william.jones@example.com,+1-555-100-1005,1987-09-30,"654 Birch Lane",Boston,USA,US56789012
+6,Sophia,Garcia,sophia.garcia@example.com,+1-555-100-1006,1993-04-12,"987 Elm Street",Miami,USA,US67890123
+7,James,Miller,james.miller@example.com,+1-555-100-1007,1991-08-27,"159 Walnut Court",Denver,USA,US78901234
+8,Isabella,Davis,isabella.davis@example.com,+1-555-100-1008,1996-06-09,"753 Spruce Way",Phoenix,USA,US89012345
+9,Benjamin,Martinez,benjamin.martinez@example.com,+1-555-100-1009,1989-12-14,"852 Aspen Circle",Atlanta,USA,US90123456
+10,Mia,Anderson,mia.anderson@example.com,+1-555-100-1010,1994-10-03,"951 Willow Boulevard",San Francisco,USA,US01234567
