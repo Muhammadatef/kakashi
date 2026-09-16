@@ -1,0 +1,53 @@
+name: CI
+
+# Runs the full 101-test suite on every push and PR across the three Node
+# major versions Kakashi supports. Kept intentionally boring: no linting,
+# no coverage upload, no matrix expansion — just: does it install, does it
+# test green. The test suite already runs offline in < 3 seconds so we
+# don't need any caching cleverness.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22']
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          # Cache the npm registry to speed up subsequent runs without
+          # requiring a package-lock.json (Kakashi has never shipped one).
+          cache: 'npm'
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Test
+        run: npm test
+
+      # A quick post-test sanity check that the CLI actually invokes.
+      # Catches missing shebangs, broken bins, and packaging regressions.
+      - name: Smoke test — kakashi --version
+        run: node bin/kakashi.js --version
+
+      - name: Smoke test — kakashi list-patterns
+        run: node bin/kakashi.js list-patterns | head -30

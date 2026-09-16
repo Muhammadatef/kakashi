@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en" dir="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kakashi — Adoption Dashboard</title>
+<link rel="icon" href="../../logo-64.png">
+<style>
+  :root {
+    --bg: #0b0d10;
+    --fg: #e6e6e6;
+    --muted: #98a2b3;
+    --card: #12161c;
+    --accent: #ef4444;
+    --border: #1c232c;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "Cairo", "Noto Sans Arabic", sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.55;
+  }
+  header {
+    padding: 2rem 1.5rem 1rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 1.75rem; }
+  header p { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.95rem; }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+  .card .label {
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.5rem;
+  }
+  .card .value {
+    font-size: 2rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--fg);
+  }
+  .card .sub {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+  }
+  .card.accent .value { color: var(--accent); }
+  h2 { margin-top: 2.5rem; font-size: 1.15rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+  code {
+    background: rgba(255,255,255,0.06);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: "SF Mono", "JetBrains Mono", monospace;
+    font-size: 0.85em;
+  }
+  a { color: #7ab8ff; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  footer { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+  .loading { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Kakashi — Adoption Dashboard</h1>
+    <p>Sovereign privacy infrastructure for agentic AI. Live public metrics.</p>
+  </header>
+
+  <main class="container">
+
+    <div class="grid">
+      <div class="card accent">
+        <div class="label">npm — weekly downloads</div>
+        <div class="value" id="npm-week">—</div>
+        <div class="sub" id="npm-week-sub">last 7 days</div>
+      </div>
+      <div class="card">
+        <div class="label">npm — total (last month)</div>
+        <div class="value" id="npm-month">—</div>
+        <div class="sub">rolling 30-day window</div>
+      </div>
+      <div class="card">
+        <div class="label">GitHub stars</div>
+        <div class="value" id="gh-stars">—</div>
+        <div class="sub" id="gh-open">— open issues</div>
+      </div>
+      <div class="card">
+        <div class="label">GitHub forks</div>
+        <div class="value" id="gh-forks">—</div>
+        <div class="sub">community contributors welcome</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">AI agents supported</div>
+        <div class="value">20+</div>
+        <div class="sub">Cursor · Claude · Copilot · Codex · Windsurf · Cline · Continue · Aider · Roo · Kilo · OpenHands · Warp · Replit · Junie · Augment · …</div>
+      </div>
+      <div class="card">
+        <div class="label">Detection patterns</div>
+        <div class="value">34</div>
+        <div class="sub">including Emirates ID, UAE passport, UAE IBAN, Arabic names, 15+ credential classes</div>
+      </div>
+      <div class="card">
+        <div class="label">File formats</div>
+        <div class="value">50+</div>
+        <div class="sub">DOCX · XLSX · PPTX · PDF · JSON · YAML · .env · 40+ source-code exts</div>
+      </div>
+      <div class="card">
+        <div class="label">Database drivers</div>
+        <div class="value">6</div>
+        <div class="sub">PostgreSQL · MySQL · MongoDB · Snowflake · Databricks · SQLite</div>
+      </div>
+      <div class="card">
+        <div class="label">PDPL articles mapped</div>
+        <div class="value">9</div>
+        <div class="sub">Federal Decree-Law 45 / 2021 — Art. 1, 5, 6, 9, 15, 20, 21, 22, 25</div>
+      </div>
+      <div class="card">
+        <div class="label">Automated tests</div>
+        <div class="value">101</div>
+        <div class="sub">across patterns · masker · CLI · PDPL · DB · reporter · i18n · agent-guard</div>
+      </div>
+      <div class="card">
+        <div class="label">Network calls during scan / mask</div>
+        <div class="value accent" style="color:#22c55e">0</div>
+        <div class="sub">nothing leaves your machine — ever</div>
+      </div>
+      <div class="card">
+        <div class="label">Languages</div>
+        <div class="value">EN · AR</div>
+        <div class="sub">bilingual CLI + compliance reports</div>
+      </div>
+    </div>
+
+    <h2>What Kakashi catches</h2>
+    <table>
+      <thead>
+        <tr><th>Category</th><th>Examples</th><th>PDPL articles</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ID &amp; Documents</td>
+          <td>Emirates ID (Luhn), UAE passport, UAE IBAN (mod-97), UAE mobile/landline, trade licence, Arabic names, P.O. Box, unified ID, visa</td>
+          <td><code>Art. 1</code> <code>Art. 15</code> <code>Art. 20</code> <code>Art. 22</code></td>
+        </tr>
+        <tr>
+          <td>Personal Info</td>
+          <td>email, phone, IP, credit card (Luhn), SSN, DOB, full name, age</td>
+          <td><code>Art. 1</code> <code>Art. 5</code> <code>Art. 22</code></td>
+        </tr>
+        <tr>
+          <td>Credentials</td>
+          <td>OpenAI, Anthropic, AWS, GitHub, Stripe, Slack, HuggingFace, Databricks, JWT, Bearer, SSH keys, DB connection strings, S3 URIs, .env secrets, hex secrets</td>
+          <td><code>Art. 20</code> <code>Art. 21</code></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Install in 30 seconds</h2>
+    <pre style="background:var(--card);padding:1rem;border-radius:8px;overflow-x:auto;"><code>npm install -g @muhammadatef/kakashi
+kakashi scan tests/fixtures/uae_sample.md
+kakashi scan-dir . -f html -o audit.html --lang ar</code></pre>
+
+    <footer>
+      Made in the UAE · MIT license · <a href="https://github.com/Muhammadatef/kakashi">github.com/Muhammadatef/kakashi</a>
+      <br>
+      <span id="updated" class="loading">Fetching live metrics…</span>
+    </footer>
+  </main>
+
+<script>
+  // -----------------------------------------------------------------------
+  // Fetch live public metrics from npm and GitHub.
+  // No auth needed. If a request fails (rate limit, offline), we silently
+  // fall back to the static "—" so the page still renders cleanly.
+  // -----------------------------------------------------------------------
+  async function jget(url) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
+    } catch (err) {
+      console.warn("dashboard fetch failed:", url, err);
+      return null;
+    }
+  }
+
+  function fmt(n) {
+    if (typeof n !== "number") return "—";
+    if (n < 1000) return String(n);
+    if (n < 1000000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+    return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+  }
+
+  (async () => {
+    // Weekly downloads
+    const wk = await jget("https://api.npmjs.org/downloads/point/last-week/@muhammadatef/kakashi");
+    if (wk && typeof wk.downloads === "number") {
+      document.getElementById("npm-week").textContent = fmt(wk.downloads);
+      document.getElementById("npm-week-sub").textContent = `${wk.start} → ${wk.end}`;
+    }
+
+    // Monthly downloads
+    const mo = await jget("https://api.npmjs.org/downloads/point/last-month/@muhammadatef/kakashi");
+    if (mo && typeof mo.downloads === "number") {
+      document.getElementById("npm-month").textContent = fmt(mo.downloads);
+    }
+
+    // GitHub repo stats
+    const gh = await jget("https://api.github.com/repos/Muhammadatef/kakashi");
+    if (gh) {
+      document.getElementById("gh-stars").textContent = fmt(gh.stargazers_count);
+      document.getElementById("gh-forks").textContent = fmt(gh.forks_count);
+      document.getElementById("gh-open").textContent  = `${fmt(gh.open_issues_count)} open issues`;
+    }
+
+    document.getElementById("updated").textContent =
+      "Last refreshed " + new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
+    document.getElementById("updated").classList.remove("loading");
+  })();
+</script>
+</body>
+</html>

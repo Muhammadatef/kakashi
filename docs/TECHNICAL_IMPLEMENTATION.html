@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>Kakashi — Technical Implementation</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 20mm 16mm;
+    @bottom-center { content: "Kakashi v1.1.0 — Technical Implementation"; font-size: 8pt; color: #888; }
+    @bottom-right  { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #888; }
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 10.5pt; }
+  body {
+    font-family: "Inter", "Helvetica Neue", -apple-system, "Segoe UI", "Noto Sans", "Cairo", sans-serif;
+    color: #1a1a1a;
+    line-height: 1.5;
+    margin: 0;
+  }
+  h1, h2, h3, h4 { font-family: "Inter", "Helvetica Neue", sans-serif; letter-spacing: -0.01em; }
+  h1 { font-size: 26pt; margin: 0 0 4pt; line-height: 1.15; }
+  h2 { font-size: 16pt; margin: 22pt 0 8pt; padding-bottom: 4pt; border-bottom: 1.5pt solid #d0d5dd; page-break-after: avoid; }
+  h3 { font-size: 12pt; margin: 14pt 0 6pt; color: #b91c1c; page-break-after: avoid; }
+  h4 { font-size: 10.5pt; margin: 10pt 0 4pt; text-transform: uppercase; letter-spacing: 0.04em; color: #667085; }
+  p  { margin: 0 0 6pt; }
+  a  { color: #b91c1c; text-decoration: none; }
+  code {
+    font-family: "SF Mono", "JetBrains Mono", "Consolas", monospace;
+    font-size: 8.8pt;
+    background: #f2f4f7;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  pre {
+    background: #f2f4f7;
+    border-left: 3pt solid #b91c1c;
+    padding: 8pt 10pt;
+    font-family: "SF Mono", "JetBrains Mono", "Consolas", monospace;
+    font-size: 8.5pt;
+    line-height: 1.4;
+    overflow-x: auto;
+    margin: 6pt 0 8pt;
+    border-radius: 3px;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 6pt 0 10pt;
+    font-size: 9pt;
+    page-break-inside: avoid;
+  }
+  th, td { text-align: left; padding: 4pt 6pt; border-bottom: 0.5pt solid #d0d5dd; vertical-align: top; }
+  th { background: #f2f4f7; font-weight: 600; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.03em; color: #475467; }
+  td.center { text-align: center; }
+  td.mono, code.mono { font-family: "SF Mono", "JetBrains Mono", monospace; font-size: 8.5pt; }
+  ul, ol { margin: 4pt 0 8pt; padding-inline-start: 18pt; }
+  li { margin-bottom: 2pt; }
+
+  /* Cover page */
+  .cover {
+    height: 250mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    page-break-after: always;
+  }
+  .cover .brand { font-size: 42pt; font-weight: 800; color: #b91c1c; margin: 0 0 4pt; }
+  .cover .tag   { font-size: 14pt; color: #475467; margin: 0 0 40pt; font-weight: 400; }
+  .cover .title { font-size: 22pt; font-weight: 600; margin: 0 0 6pt; }
+  .cover .sub   { font-size: 12pt; color: #667085; margin: 0 0 60pt; }
+  .cover .meta  { font-size: 10pt; color: #475467; line-height: 1.7; }
+  .cover .meta div { margin: 2pt 0; }
+  .cover hr { border: 0; border-top: 1pt solid #d0d5dd; width: 80mm; margin: 30pt auto; }
+
+  /* Layout helpers */
+  .callout {
+    background: #fff4e5;
+    border-left: 3pt solid #b45309;
+    padding: 8pt 10pt;
+    margin: 8pt 0 10pt;
+    font-size: 10pt;
+    page-break-inside: avoid;
+  }
+  .callout.accent { background: #fef2f2; border-left-color: #b91c1c; }
+  .callout.info   { background: #eff6ff; border-left-color: #1d4ed8; }
+  .callout.good   { background: #ecfdf5; border-left-color: #059669; }
+  .callout strong { color: #b91c1c; }
+
+  .page-break { page-break-after: always; }
+  .no-break   { page-break-inside: avoid; }
+
+  .figure {
+    margin: 10pt 0 14pt;
+    text-align: center;
+    page-break-inside: avoid;
+  }
+  .figure svg { max-width: 100%; height: auto; }
+  .figure .caption { font-size: 8.5pt; color: #667085; margin-top: 4pt; font-style: italic; }
+
+  .toc { columns: 2; column-gap: 18pt; font-size: 10pt; margin: 8pt 0 12pt; }
+  .toc a { display: block; margin: 2pt 0; color: #1a1a1a; }
+  .toc a .num { display: inline-block; width: 22pt; color: #b91c1c; font-weight: 600; }
+
+  .badge {
+    display: inline-block;
+    padding: 1pt 5pt;
+    border-radius: 3pt;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: #f2f4f7;
+    color: #475467;
+    font-weight: 600;
+  }
+  .badge.critical { background: #fef2f2; color: #b91c1c; }
+  .badge.high     { background: #fff4e5; color: #b45309; }
+  .badge.medium   { background: #fef9c3; color: #a16207; }
+  .badge.low      { background: #ecfdf5; color: #059669; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
+  .kv { display: grid; grid-template-columns: 60mm 1fr; gap: 4pt 10pt; font-size: 9.5pt; }
+  .kv .k { color: #667085; font-weight: 500; }
+
+  /* Print refinements */
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre, table, .figure { page-break-inside: avoid; }
+    h2, h3 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- =================================================================== COVER -->
+<section class="cover">
+  <div class="brand">kakashi</div>
+  <div class="tag">Sovereign privacy infrastructure for agentic AI</div>
+
+  <div class="title">Technical Implementation</div>
+  <div class="sub">Version 1.1.0 · September 2026</div>
+
+  <hr>
+
+  <div class="meta">
+    <div><strong>Author:</strong> Mohamed Atef Fahmy</div>
+    <div><strong>Repository:</strong> github.com/Muhammadatef/kakashi</div>
+    <div><strong>Package:</strong> npm @muhammadatef/kakashi</div>
+    <div><strong>Licence:</strong> MIT</div>
+    <div><strong>Developed in:</strong> United Arab Emirates</div>
+    <div><strong>Prepared for:</strong> UAE AI Award — 3rd Edition</div>
+    <div><strong>Category:</strong> Agentic AI Solutions Developed in the UAE</div>
+  </div>
+</section>
+
+<!-- =================================================================== TOC -->
+<section>
+  <h2>Contents</h2>
+  <div class="toc">
+    <a href="#s1"><span class="num">1.</span> Executive summary</a>
+    <a href="#s2"><span class="num">2.</span> System architecture</a>
+    <a href="#s3"><span class="num">3.</span> Core engine — detection &amp; masking</a>
+    <a href="#s4"><span class="num">4.</span> File-format handlers</a>
+    <a href="#s5"><span class="num">5.</span> Database masking layer</a>
+    <a href="#s6"><span class="num">6.</span> PDPL compliance layer</a>
+    <a href="#s7"><span class="num">7.</span> Enterprise directory scanner</a>
+    <a href="#s8"><span class="num">8.</span> Bilingual (EN / AR) i18n</a>
+    <a href="#s9"><span class="num">9.</span> Agent-guard sidecar daemon</a>
+    <a href="#s10"><span class="num">10.</span> AI-agent integration protocol</a>
+    <a href="#s11"><span class="num">11.</span> Trust boundary &amp; threat model</a>
+    <a href="#s12"><span class="num">12.</span> Test coverage &amp; CI</a>
+    <a href="#s13"><span class="num">13.</span> Deployment &amp; operations</a>
+    <a href="#s14"><span class="num">14.</span> UAE framework alignment</a>
+    <a href="#s15"><span class="num">15.</span> Roadmap</a>
+    <a href="#s16"><span class="num">16.</span> Appendix — CLI reference</a>
+    <a href="#s17"><span class="num">17.</span> Appendix — pattern catalogue</a>
+    <a href="#s18"><span class="num">18.</span> Appendix — PDPL article map</a>
+  </div>
+</section>
+
+<!-- =================================================================== 1 -->
+<section id="s1">
+  <h2>1 · Executive summary</h2>
+
+  <p>Kakashi is an open-source, locally-executed privacy layer designed to prevent personal data, credentials, and sovereign identifiers from crossing the boundary between a user's device and any external Large Language Model. It installs as a first-class <em>skill</em> inside more than 20 agentic-AI platforms — Cursor, Claude Code, GitHub Copilot, OpenAI Codex, Windsurf, Cline, Continue, Aider, JetBrains Junie, Roo Code, and others — and exposes a loopback HTTP API that any additional Model-Context-Protocol (MCP) client can consult before shipping data.</p>
+
+  <p>Kakashi is <strong>not itself an artificial-intelligence system</strong>. It is a deterministic, rule-based safety layer that operates around AI systems. This design decision eliminates every class of AI-ethics concern that stems from opacity, hallucination, learned bias, or model drift, and yields four inherent properties that regulated agentic-AI deployments require:</p>
+
+  <ul>
+    <li><strong>Deterministic</strong> — the same input always produces the same masking output; no hallucinated tokens.</li>
+    <li><strong>Auditable</strong> — every detection rule is a regular expression readable by a compliance officer.</li>
+    <li><strong>Bias-free</strong> — no training data means no encoded bias; the same pattern fires for every user regardless of nationality, gender, or language.</li>
+    <li><strong>Explainable</strong> — every finding carries its pattern identifier, its severity, and the specific article of the UAE Personal Data Protection Law that governs it.</li>
+  </ul>
+
+  <div class="callout accent">
+    <strong>The single strategic sentence.</strong> Kakashi is the sovereign privacy infrastructure that makes agentic AI safe to deploy at UAE national scale. Every module described in this document exists to reinforce that thesis.
+  </div>
+
+  <h3>Version 1.1.0 highlights</h3>
+  <div class="kv">
+    <div class="k">Release date</div><div>September 2026</div>
+    <div class="k">Detection patterns</div><div>34 across three categories (ID &amp; Documents, Personal Info, Credentials); env_secret matches 15+ credential naming conventions on top</div>
+    <div class="k">File formats</div><div>50+ with format-preserving masking</div>
+    <div class="k">Database drivers</div><div>6 native adapters (PostgreSQL, MySQL, MongoDB, Snowflake, Databricks, SQLite)</div>
+    <div class="k">Agentic platforms</div><div>20+ pre-integrated agent skills</div>
+    <div class="k">PDPL articles mapped</div><div>9 (Federal Decree-Law 45/2021 Articles 1, 5, 6, 9, 15, 20, 21, 22, 25)</div>
+    <div class="k">Languages</div><div>English + Arabic, full RTL preservation</div>
+    <div class="k">Automated tests</div><div>101 across 8 test suites</div>
+    <div class="k">Network calls</div><div>Zero during scan / mask; one to npm at install</div>
+    <div class="k">Licence</div><div>MIT — open source</div>
+  </div>
+</section>
+
+<!-- =================================================================== 2 -->
+<section id="s2">
+  <h2>2 · System architecture</h2>
+
+  <p>Kakashi is composed of four horizontal layers. Every layer is independently testable and consumes only the layer directly beneath it, giving the system the shape below.</p>
+
+  <div class="figure no-break">
+    <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="12">
+      <!-- Layer 4 -->
+      <rect x="40" y="30" width="640" height="60" rx="6" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.5"/>
+      <text x="60" y="55" font-weight="700" fill="#b91c1c">Layer 4 · Agentic Sidecar</text>
+      <text x="60" y="75" fill="#333">agent-guard — loopback HTTP daemon + filesystem watcher</text>
+
+      <!-- Layer 3 -->
+      <rect x="40" y="105" width="640" height="80" rx="6" fill="#fff4e5" stroke="#b45309" stroke-width="1.5"/>
+      <text x="60" y="130" font-weight="700" fill="#b45309">Layer 3 · Compliance &amp; UX</text>
+      <text x="60" y="150" fill="#333">PDPL mapping · Reporter (HTML / JSON / MD) · scan-dir · i18n (EN + AR)</text>
+      <text x="60" y="170" font-size="10" fill="#666">produces the audit-ready evidence artifact for a Data Protection Officer</text>
+
+      <!-- Layer 2 -->
+      <rect x="40" y="200" width="640" height="80" rx="6" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.5"/>
+      <text x="60" y="225" font-weight="700" fill="#1d4ed8">Layer 2 · Core Engine</text>
+      <text x="60" y="245" fill="#333">Pattern registry · maskText() · Format handlers (docx/xlsx/pptx/pdf) · DB drivers</text>
+      <text x="60" y="265" font-size="10" fill="#666">deterministic, pure-function core; no I/O beyond the file / DB adapter it is given</text>
+
+      <!-- Layer 1 -->
+      <rect x="40" y="295" width="640" height="30" rx="6" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+      <text x="60" y="315" font-weight="700" fill="#059669">Layer 1 · Skill rules — what tells 20+ AI agents WHEN to invoke Kakashi</text>
+    </svg>
+    <div class="caption">Fig 2.1 — Four-layer architecture. Each layer is a separate npm-package boundary and can be tested in isolation.</div>
+  </div>
+
+  <p>The layer boundaries are intentional. If an integration partner wants only the compliance reporter, they can import <code>src/lib/pdpl-mapping.js</code> and <code>src/lib/reporter.js</code> without adopting the CLI. If they want only database masking, <code>src/engine/db/</code> is a stand-alone module. If a government pilot wants only the agent-guard daemon, it ships as a single-command binary. Modularity is a first-class value.</p>
+
+  <h3>Repository layout</h3>
+  <pre><code>kakashi/
+├── bin/
+│   ├── kakashi.js          CLI entry-point (Commander-based)
+│   └── install.js          Agent-detection + skill installer
+├── src/
+│   ├── engine/
+│   │   ├── patterns.js     Detection rules + checksum helpers
+│   │   ├── masker.js       Tokenise + reconstruct
+│   │   ├── formats/        Per-format read/write adapters
+│   │   └── db/             Per-driver DB adapters (lazy-loaded)
+│   ├── lib/
+│   │   ├── pdpl-mapping.js UAE PDPL article map
+│   │   ├── reporter.js     JSON / HTML / MD renderer
+│   │   ├── scan-dir.js     Concurrent tree scanner
+│   │   ├── i18n.js         EN + AR translations
+│   │   ├── output.js       CLI printing
+│   │   └── stats.js        Cumulative stats + impact snapshot
+│   └── agent/
+│       └── guard.js        Loopback HTTP daemon
+├── tests/                  101 automated tests, 8 suites
+└── docs/                   Architecture, submission, video kit
+</code></pre>
+</section>
+
+<!-- =================================================================== 3 -->
+<section id="s3">
+  <h2>3 · Core engine — detection &amp; masking</h2>
+
+  <h3>3.1 The pattern registry</h3>
+  <p>Every detection lives in a single file, <code>src/engine/patterns.js</code>, as a plain JavaScript object with a stable schema:</p>
+
+  <pre><code>{
+  id:      'national_id',            // stable key -&gt; token like [NATIONAL_ID_1]
+  label:   'Emirates ID',            // English display name
+  labelAr: 'الهوية الإماراتية',       // Arabic display name (for A4 i18n + HTML report)
+  cat:     'id',                     // 'id' | 'pii' | 'cred'
+  rx:      /\b784-\d{4}-\d{7}-\d\b/g, // regex
+  validate: (m, text, i) =&gt; ...,      // optional false-positive filter
+  fakeValues: ['784-1990-9999999-0']  // used by --mode fake
+}</code></pre>
+
+  <p>The <code>id</code> is stable across releases so a downstream user can rely on the token names (e.g. <code>[NATIONAL_ID_1]</code>) that appear in their masked files. The <code>label</code> and <code>labelAr</code> fields are free to evolve without breaking backwards compatibility. This separation is what allowed v1.1 to add Arabic labels to every existing pattern without breaking any existing masked artifact.</p>
+
+  <h3>3.2 Checksum helpers</h3>
+  <p>For the highest-stakes identifiers, Kakashi ships stand-alone checksum validators exported alongside the pattern registry:</p>
+
+  <ul>
+    <li><code>luhnCheck(digits)</code> — the ISO/IEC 7812-1 Luhn algorithm.</li>
+    <li><code>isValidEmiratesId(id)</code> — 15-digit Luhn validation with mandatory <code>784</code> country prefix.</li>
+    <li><code>isValidIban(iban)</code> — ISO 13616 mod-97 remainder validation for International Bank Account Numbers.</li>
+  </ul>
+
+  <p>These validators are deliberately <em>not</em> wired into the pattern <code>validate</code> hooks. That decision reflects a threat-modelling principle: attackers frequently transpose digits, so a leaked identifier with a broken check digit is still a leaked identifier and must still be flagged. The stand-alone helpers are consumed by the reporter (§6) to <em>badge</em> findings as "checksum-verified" without discarding suspect-looking IDs.</p>
+
+  <h3>3.3 The <code>maskText</code> algorithm</h3>
+  <p>The masker is a single pure function with a five-step algorithm:</p>
+
+  <ol>
+    <li>Collect all regex matches from every active pattern.</li>
+    <li>Sort matches by start position, then descending length (longer wins at the same position).</li>
+    <li>Resolve overlaps by keeping the first match whose start is beyond the last accepted match's end (non-overlapping set).</li>
+    <li>Assign consistent replacements — the same original value receives the same token throughout the document (<code>alice@x.com</code> always becomes <code>[EMAIL_1]</code>).</li>
+    <li>Apply replacements end-to-start so earlier offsets remain valid as later text is rewritten.</li>
+  </ol>
+
+  <h3>3.4 Three masking modes</h3>
+  <table>
+    <thead><tr><th>Mode</th><th>Example output</th><th>When to use</th></tr></thead>
+    <tbody>
+      <tr><td><code>typed</code> (default)</td><td><code>[EMAIL_1]</code>, <code>[OPENAI_KEY_2]</code></td><td>Preserves document readability and lets the AI reason about types</td></tr>
+      <tr><td><code>redact</code></td><td><code>[REDACTED]</code></td><td>Maximum anonymity when the AI does not need type context</td></tr>
+      <tr><td><code>fake</code></td><td><code>user_a@example.com</code></td><td>Preserves plausible LLM context for content-generation prompts</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- =================================================================== 4 -->
+<section id="s4">
+  <h2>4 · File-format handlers</h2>
+
+  <p>Kakashi supports over 50 file formats. The <code>src/engine/formats/</code> directory contains a handler per family, each implementing two functions:</p>
+
+  <pre><code>async function readFile(filePath)  -&gt; { format, text, ...metadata }
+async function writeMasked(inPath, outPath, data, replMap, maskedText)</code></pre>
+
+  <p>The <code>readFile</code> extracts a canonical text representation for the masker; the <code>writeMasked</code> reconstructs the file in its original binary format after substitution. This is what lets Kakashi output a real Word file, not a text dump of one.</p>
+
+  <table>
+    <thead><tr><th>Format</th><th>Library</th><th>Status</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Text / code (40+ ext)</td><td>native <code>fs</code></td><td>stable</td><td>Any text-shaped file; format is trivially preserved.</td></tr>
+      <tr><td>Excel (<code>.xlsx</code>, <code>.xls</code>)</td><td><code>xlsx</code> (SheetJS)</td><td>stable</td><td>Cell-level masking; catches secrets embedded in narrative cells.</td></tr>
+      <tr><td>Word (<code>.docx</code>)</td><td><code>jszip</code></td><td>best-effort</td><td>XML <code>&lt;w:t&gt;</code> replacement; multi-run secrets tracked for v1.2.</td></tr>
+      <tr><td>PowerPoint (<code>.pptx</code>)</td><td><code>jszip</code></td><td>best-effort</td><td>XML <code>&lt;a:t&gt;</code> replacement.</td></tr>
+      <tr><td>PDF (<code>.pdf</code>)</td><td><code>pdf-parse</code></td><td>text-only</td><td>Text extract → masked <code>.md</code>; real PDF round-trip tracked for v1.2.</td></tr>
+      <tr><td>JSON / JSONL / JSON5</td><td>native</td><td>stable</td><td>Text-based; masking preserves structure.</td></tr>
+      <tr><td>YAML / TOML / XML</td><td>native</td><td>stable</td><td>Text-based; masking preserves structure.</td></tr>
+      <tr><td>CSV / TSV</td><td>native</td><td>stable</td><td>Same code path as text; delimiters preserved.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- =================================================================== 5 -->
+<section id="s5">
+  <h2>5 · Database masking layer</h2>
+
+  <p>Kakashi v1.1 introduces client-side database masking. A user can point Kakashi at a live database, run a SQL (or NoSQL) query, and receive a masked local copy of the results without ever exposing the raw rows to any AI agent. Six drivers ship out of the box.</p>
+
+  <div class="figure no-break">
+    <svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="11">
+      <rect x="20"  y="30"  width="90" height="40" rx="4" fill="#fef2f2" stroke="#b91c1c"/>
+      <text x="65" y="55" text-anchor="middle" font-weight="600" fill="#b91c1c">User CLI</text>
+
+      <rect x="150" y="30"  width="120" height="40" rx="4" fill="#eff6ff" stroke="#1d4ed8"/>
+      <text x="210" y="55" text-anchor="middle" font-weight="600" fill="#1d4ed8">db/index.js</text>
+
+      <rect x="310" y="30"  width="120" height="40" rx="4" fill="#eff6ff" stroke="#1d4ed8"/>
+      <text x="370" y="55" text-anchor="middle" font-weight="600" fill="#1d4ed8">Driver</text>
+
+      <rect x="470" y="30"  width="120" height="40" rx="4" fill="#f2f4f7" stroke="#475467"/>
+      <text x="530" y="55" text-anchor="middle" font-weight="600" fill="#475467">Remote DB</text>
+
+      <rect x="150" y="120" width="120" height="40" rx="4" fill="#eff6ff" stroke="#1d4ed8"/>
+      <text x="210" y="145" text-anchor="middle" font-weight="600" fill="#1d4ed8">maskText</text>
+
+      <rect x="310" y="120" width="120" height="40" rx="4" fill="#ecfdf5" stroke="#059669"/>
+      <text x="370" y="145" text-anchor="middle" font-weight="600" fill="#059669">masked_out.jsonl</text>
+
+      <!-- arrows -->
+      <line x1="110" y1="50"  x2="150" y2="50"  stroke="#333" marker-end="url(#a)"/>
+      <line x1="270" y1="50"  x2="310" y2="50"  stroke="#333" marker-end="url(#a)"/>
+      <line x1="430" y1="50"  x2="470" y2="50"  stroke="#333" marker-end="url(#a)"/>
+      <line x1="530" y1="70"  x2="530" y2="90"  stroke="#333" marker-end="url(#a)"/>
+      <text x="540" y="85" fill="#333">rows</text>
+      <line x1="530" y1="90"  x2="370" y2="90"  stroke="#333"/>
+      <line x1="370" y1="90"  x2="370" y2="120" stroke="#333" marker-end="url(#a)"/>
+      <line x1="310" y1="140" x2="270" y2="140" stroke="#333" marker-end="url(#a)"/>
+      <line x1="210" y1="120" x2="210" y2="90"  stroke="#333"/>
+      <line x1="210" y1="90"  x2="230" y2="70"  stroke="#333"/>
+
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 Z" fill="#333"/>
+        </marker>
+      </defs>
+
+      <text x="20" y="200" font-size="10" fill="#666">All rows stream through the client-side driver; nothing traverses a Kakashi-owned server.</text>
+    </svg>
+    <div class="caption">Fig 5.1 — Client-side database masking. Kakashi never brokers the connection through any hosted service.</div>
+  </div>
+
+  <h3>5.1 Driver registry</h3>
+  <p>Drivers are lazily <code>require()</code>-d, so a user only installs the client library for the database they actually consume. If the client is missing, Kakashi throws a friendly error naming the exact <code>npm install</code> command.</p>
+
+  <table>
+    <thead><tr><th>Driver</th><th>Library</th><th>Install command</th></tr></thead>
+    <tbody>
+      <tr><td>PostgreSQL</td><td><code>pg</code></td><td><code>npm install pg</code></td></tr>
+      <tr><td>MySQL / MariaDB</td><td><code>mysql2</code></td><td><code>npm install mysql2</code></td></tr>
+      <tr><td>MongoDB</td><td><code>mongodb</code></td><td><code>npm install mongodb</code></td></tr>
+      <tr><td>Snowflake</td><td><code>snowflake-sdk</code></td><td><code>npm install snowflake-sdk</code></td></tr>
+      <tr><td>Databricks</td><td><code>@databricks/sql</code></td><td><code>npm install @databricks/sql</code></td></tr>
+      <tr><td>SQLite</td><td><code>better-sqlite3</code></td><td><code>npm install better-sqlite3</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.2 CLI usage</h3>
+  <pre><code># Count-only scan of a query — agent-safe, nothing written
+kakashi db-scan "postgres://user:pass@host/db" -q "SELECT * FROM customers LIMIT 100"
+
+# Mask a query result to a local JSONL file
+kakashi db-mask "postgres://user:pass@host/db" \
+  -q "SELECT * FROM customers WHERE country='UAE'" \
+  -o masked_customers.jsonl -f jsonl</code></pre>
+</section>
+
+<!-- =================================================================== 6 -->
+<section id="s6">
+  <h2>6 · PDPL compliance layer</h2>
+
+  <p>The compliance layer, in <code>src/lib/pdpl-mapping.js</code>, links every detection pattern to specific articles of the <em>UAE Federal Decree-Law No. 45 of 2021 concerning the Protection of Personal Data (PDPL)</em>. The mapping is the intellectual centrepiece of Kakashi's regulatory value proposition.</p>
+
+  <div class="callout info">
+    <strong>Design choice.</strong> The file is <em>data, not logic</em>. It has zero I/O and zero side-effects. Consumers (the reporter, the agent-guard API, any third-party dashboard) import the map and enrich their findings in-process. Keeping this layer declarative means a legal counsel or compliance officer can review it as one flat document without reading application code.
+  </div>
+
+  <h3>6.1 Article catalogue</h3>
+  <p>Nine articles are formally mapped:</p>
+
+  <table>
+    <thead><tr><th>Article</th><th>Title</th><th>Kakashi coverage</th></tr></thead>
+    <tbody>
+      <tr><td><code>Art. 1</code></td><td>Definitions of Personal Data</td><td>All personal-info patterns</td></tr>
+      <tr><td><code>Art. 5</code></td><td>Conditions for Processing</td><td>Consent-preserving typed masking</td></tr>
+      <tr><td><code>Art. 6</code></td><td>Consent</td><td>Available for future explicit-consent workflows</td></tr>
+      <tr><td><code>Art. 9</code></td><td>Rights of the Data Subject</td><td>Available for right-to-erasure workflows</td></tr>
+      <tr><td><code>Art. 15</code></td><td>Sensitive Personal Data</td><td>Emirates ID, passport, IBAN, credit card, SSN</td></tr>
+      <tr><td><code>Art. 20</code></td><td>Security of Personal Data</td><td>Every credential pattern (15+ classes)</td></tr>
+      <tr><td><code>Art. 21</code></td><td>Reporting a Data Breach</td><td>Every leaked credential becomes a candidate breach event</td></tr>
+      <tr><td><code>Art. 22</code></td><td>Cross-Border Transfer</td><td>Every identifier destined for a foreign LLM</td></tr>
+      <tr><td><code>Art. 25</code></td><td>Data Protection Officer</td><td>The compliance report is DPO-ready</td></tr>
+    </tbody>
+  </table>
+
+  <h3>6.2 Severity heuristic</h3>
+  <p>Every finding is scored:</p>
+
+  <ul>
+    <li><span class="badge critical">critical</span> — sensitive personal data (Art. 15) OR live credentials</li>
+    <li><span class="badge high">high</span> — personal data with strong re-identification risk (emails, phones)</li>
+    <li><span class="badge medium">medium</span> — quasi-identifiers (names, dates of birth, IP)</li>
+    <li><span class="badge low">low</span> — weak identifiers (age, ambiguous dates)</li>
+  </ul>
+
+  <h3>6.3 Public API</h3>
+  <pre><code>const { enrich, summarize } = require('kakashi/src/lib/pdpl-mapping');
+
+// enrich a single finding
+enrich(finding) -&gt; { ...finding, severity, articles, articleSummaries, checksumVerified }
+
+// aggregate a whole scan
+summarize(findings) -&gt; { findings, summary: { total, byCategory, bySeverity, byArticle, topArticles } }</code></pre>
+</section>
+
+<!-- =================================================================== 7 -->
+<section id="s7">
+  <h2>7 · Enterprise directory scanner</h2>
+
+  <p>The <code>scan-dir</code> subcommand walks a directory tree, honours <code>.gitignore</code> and <code>.kakashiignore</code>, scans every supported file concurrently, and emits an aggregate compliance report in JSON, HTML, or Markdown.</p>
+
+  <h3>7.1 Concurrency model</h3>
+  <p>Rather than adopting <code>worker_threads</code> and paying the overhead of spawning worker processes and marshalling large buffers over <code>MessageChannel</code>, Kakashi v1.1 uses an <em>async concurrency pool</em>. Because file scanning is I/O-bound, a Promise-based pool of size <em>N</em> yields most of the wall-clock benefit of true parallelism without the operational cost. Worker-thread parallelism for CPU-bound XLSX/PDF workloads is tracked for v1.2.</p>
+
+  <h3>7.2 Report rendering</h3>
+  <p>The reporter at <code>src/lib/reporter.js</code> is a pure DATA-IN, STRING-OUT module with three renderers:</p>
+
+  <table>
+    <thead><tr><th>Renderer</th><th>Consumer</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>renderJson</code></td><td>SIEM, CI, downstream tools</td><td>Machine-readable; every finding, every PDPL article, every timestamp.</td></tr>
+      <tr><td><code>renderMarkdown</code></td><td>CLI stdout, GitHub PR comments</td><td>Readable at a glance; suitable for a pipeline comment bot.</td></tr>
+      <tr><td><code>renderHtml</code></td><td>Audit-ready deliverable</td><td>Bilingual EN / AR; <code>dir="auto"</code> for RTL; <code>@media print</code> ready for <code>chrome --print-to-pdf</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.3 CLI usage</h3>
+  <pre><code>kakashi scan-dir ./project \
+  --format html \
+  --lang ar \
+  --parallel 8 \
+  --output audit_report.html
+
+# Then to convert to PDF (offline):
+chromium --headless --print-to-pdf=audit.pdf audit_report.html</code></pre>
+</section>
+
+<!-- =================================================================== 8 -->
+<section id="s8">
+  <h2>8 · Bilingual (EN / AR) i18n</h2>
+
+  <p>Kakashi ships a native Arabic experience — not a Google-Translate afterthought. The <code>src/lib/i18n.js</code> module carries English and Arabic string tables, resolves the active language from four sources in priority order, and provides a <code>t(key)</code> helper with placeholder substitution:</p>
+
+  <ol>
+    <li>Explicit <code>--lang</code> CLI flag (highest priority)</li>
+    <li><code>KAKASHI_LANG</code> environment variable</li>
+    <li><code>LANG</code> environment variable if it starts with <code>ar</code> (e.g. <code>ar_AE.UTF-8</code>)</li>
+    <li>Fallback: English</li>
+  </ol>
+
+  <h3>8.1 What is translated</h3>
+  <ul>
+    <li>All user-facing CLI strings — scan headers, finding summaries, error messages, success confirmations.</li>
+    <li>Every pattern label — <code>label</code> and <code>labelAr</code> are stored side-by-side in the pattern registry.</li>
+    <li>The full HTML compliance report — headers, table headings, PDPL article titles, severity labels, footer.</li>
+    <li>PDPL article titles in Arabic — <code>title_ar</code> alongside <code>title_en</code> in <code>src/lib/pdpl-mapping.js</code>.</li>
+    <li>A complete Arabic README at <code>README.ar.md</code>.</li>
+  </ul>
+
+  <h3>8.2 RTL preservation</h3>
+  <p>Because Kakashi's replacement tokens (e.g. <code>[NATIONAL_ID_1]</code>) contain no bidirectional-embedding characters, the surrounding Arabic text preserves its natural right-to-left flow after masking. The HTML report declares <code>dir="auto"</code> so Arabic content renders RTL and English content LTR automatically within the same document.</p>
+</section>
+
+<!-- =================================================================== 9 -->
+<section id="s9">
+  <h2>9 · Agent-guard sidecar daemon</h2>
+
+  <p>The <code>agent-guard</code> command in v1.1 is Kakashi's answer to the question that unlocks the "Agentic AI Solutions Developed in the UAE" category: <em>how do you make agentic AI safe to deploy at national scale?</em> The answer is to give every agent a local privacy sidecar it can consult before shipping any file to an external LLM.</p>
+
+  <h3>9.1 Two roles</h3>
+  <ol>
+    <li><strong>Passive watcher.</strong> On startup, agent-guard subscribes to filesystem change events under a user-specified directory. Every changed file is scanned; every finding is recorded in a JSONL audit log with UTC timestamps. A Data Protection Officer can review the log at any time and see what sensitive data was present in the tree.</li>
+    <li><strong>Active HTTP API.</strong> agent-guard exposes three endpoints on <code>127.0.0.1</code> (loopback only — never a public interface). Any MCP-enabled agent, IDE plugin, or automation can call these synchronously before shipping data.</li>
+  </ol>
+
+  <h3>9.2 HTTP endpoints</h3>
+  <table>
+    <thead><tr><th>Verb + Path</th><th>Body</th><th>Response</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /health</code></td><td>—</td><td><code>{ ok, watching, uptimeMs, filesScanned, totalFindings, version }</code></td></tr>
+      <tr><td><code>POST /scan</code></td><td><code>{ "path": "..." }</code></td><td><code>{ path, summary }</code> — PDPL-enriched summary; no raw values</td></tr>
+      <tr><td><code>POST /mask</code></td><td><code>{ "path": "...", "output": "..." }</code></td><td><code>{ output, replacements }</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.3 Loopback enforcement</h3>
+  <p>Belt-and-braces security. Even though the daemon binds to <code>127.0.0.1</code>, every incoming request is additionally checked against <code>req.socket.remoteAddress</code> and rejected with 403 unless the origin matches a loopback prefix (<code>127.</code>, <code>::1</code>, <code>::ffff:127.</code>). This defends against edge cases where a reverse proxy or Docker network setup might have forwarded a non-local request to the daemon.</p>
+
+  <div class="callout good">
+    <strong>Zero-network-call preservation.</strong> agent-guard never opens an outbound socket. All state is in-memory plus one local JSONL log. Kakashi's "nothing leaves your machine" guarantee holds even while running as a long-lived daemon.
+  </div>
+</section>
+
+<!-- =================================================================== 10 -->
+<section id="s10">
+  <h2>10 · AI-agent integration protocol</h2>
+
+  <h3>10.1 Shell-based agents</h3>
+  <p>Six slash commands are installed by <code>bin/install.js</code> into the config directory of every detected agent on the host:</p>
+
+  <table>
+    <thead><tr><th>Slash command</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>/kakashi</code></td><td>Activate privacy mode for the session</td></tr>
+      <tr><td><code>/kakashi-scan &lt;path&gt;</code></td><td>Counts only — agent-safe by default</td></tr>
+      <tr><td><code>/kakashi-mask &lt;path&gt;</code></td><td>Write <code>masked_&lt;file&gt;</code> alongside the original</td></tr>
+      <tr><td><code>/kakashi-audit &lt;path&gt;</code></td><td>Full original → replacement mapping (deliberately verbose)</td></tr>
+      <tr><td><code>/kakashi-stats</code></td><td>Cumulative session statistics</td></tr>
+      <tr><td><code>/kakashi-list</code></td><td>Every active detection pattern</td></tr>
+    </tbody>
+  </table>
+
+  <h3>10.2 Supported agents (20+)</h3>
+  <p>Claude Code · Cursor · GitHub Copilot · OpenAI Codex · Windsurf · Cline · Continue · Aider · JetBrains Junie · Roo Code · Kilo Code · OpenHands · Warp · Replit Agent · Augment Code · plus additional agents added on request.</p>
+
+  <h3>10.3 MCP integration path</h3>
+  <p>An MCP wrapper package (targeted for v1.2) will expose <code>kakashi_scan</code> and <code>kakashi_mask</code> as first-class MCP tools that any MCP-compliant agent (Claude Desktop, Cline, Continue, others) can call via the standard tool-calling protocol without any shell-out.</p>
+</section>
+
+<!-- =================================================================== 11 -->
+<section id="s11">
+  <h2>11 · Trust boundary &amp; threat model</h2>
+
+  <div class="figure no-break">
+    <svg viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="11">
+      <rect x="20" y="20" width="500" height="220" rx="8" fill="#ecfdf5" stroke="#059669" stroke-dasharray="4 3" stroke-width="1.5"/>
+      <text x="30" y="40" fill="#059669" font-weight="700">USER DEVICE — trusted</text>
+
+      <rect x="50"  y="60"  width="140" height="30" rx="4" fill="#fff" stroke="#333"/>
+      <text x="120" y="80" text-anchor="middle">Local disk / DB</text>
+
+      <rect x="50"  y="110" width="140" height="30" rx="4" fill="#fff" stroke="#333"/>
+      <text x="120" y="130" text-anchor="middle">formats.readFile</text>
+
+      <rect x="50"  y="160" width="140" height="30" rx="4" fill="#fff" stroke="#333"/>
+      <text x="120" y="180" text-anchor="middle">maskText → tokens</text>
+
+      <rect x="240" y="110" width="230" height="30" rx="4" fill="#fff" stroke="#333"/>
+      <text x="355" y="130" text-anchor="middle">writes masked_file (or JSON summary)</text>
+
+      <rect x="540" y="60"  width="160" height="80" rx="4" fill="#fff" stroke="#b91c1c" stroke-width="2"/>
+      <text x="620" y="90"  text-anchor="middle" font-weight="700" fill="#b91c1c">AI Agent</text>
+      <text x="620" y="108" text-anchor="middle" font-size="10">receives ONLY the</text>
+      <text x="620" y="122" text-anchor="middle" font-size="10">masked artifact +</text>
+      <text x="620" y="136" text-anchor="middle" font-size="10">summary counts</text>
+
+      <rect x="540" y="180" width="160" height="60" rx="4" fill="#fff" stroke="#333"/>
+      <text x="620" y="205" text-anchor="middle">External LLM API</text>
+      <text x="620" y="225" text-anchor="middle" font-size="9" fill="#666">OpenAI, Anthropic, ...</text>
+
+      <line x1="470" y1="125" x2="540" y2="100" stroke="#b91c1c" stroke-width="2" marker-end="url(#a2)"/>
+      <text x="475" y="118" font-size="9" fill="#b91c1c" font-weight="700">trust boundary</text>
+      <line x1="620" y1="140" x2="620" y2="180" stroke="#333" marker-end="url(#a2)"/>
+
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 Z" fill="#333"/>
+        </marker>
+      </defs>
+    </svg>
+    <div class="caption">Fig 11.1 — The Kakashi trust boundary. Only masked artifacts and summary counts cross it.</div>
+  </div>
+
+  <h3>11.1 Four defence-in-depth defaults</h3>
+  <ol>
+    <li><code>scan</code> prints <em>counts only</em>; verbose per-finding previews require an explicit <code>--verbose</code>.</li>
+    <li><code>mask</code> writes to disk; it never streams the masked bytes to stdout in the default flow.</li>
+    <li><code>audit</code> is documented as deliberately verbose and is only invoked explicitly by the operator.</li>
+    <li>agent-guard's <code>/scan</code> API returns the PDPL summary — <em>never</em> the raw finding values, even over loopback.</li>
+  </ol>
+
+  <h3>11.2 STRIDE threat model</h3>
+  <table>
+    <thead><tr><th>Category</th><th>Threat</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Spoofing</td><td>Non-loopback caller impersonates a local agent</td><td>Loopback bind + <code>remoteAddress</code> hard-check</td></tr>
+      <tr><td>Tampering</td><td>Malicious patch disables a detection rule</td><td>Signed npm publisher, MIT-licensed source auditable line-by-line</td></tr>
+      <tr><td>Repudiation</td><td>User denies having exposed a credential</td><td>JSONL audit log + compliance report with UTC timestamps</td></tr>
+      <tr><td>Information Disclosure</td><td>Kakashi leaks the secrets it detects</td><td>Counts-only default; no telemetry; no error reporting</td></tr>
+      <tr><td>DoS</td><td>Enormous input file exhausts memory</td><td>Streaming per-row for DB, per-file try/catch for scan-dir, <code>--limit</code></td></tr>
+      <tr><td>Elevation of Privilege</td><td>Daemon reads files outside its watched dir</td><td>Only reads paths the caller asks for; respects OS permissions</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- =================================================================== 12 -->
+<section id="s12">
+  <h2>12 · Test coverage &amp; CI</h2>
+
+  <p>Kakashi ships with <strong>101 automated tests</strong> across 8 test suites. The suite is deterministic, hermetic, and runs offline in under three seconds.</p>
+
+  <table>
+    <thead><tr><th>Suite</th><th>Tests</th><th>Coverage</th></tr></thead>
+    <tbody>
+      <tr><td><code>patterns.test.js</code></td><td>55</td><td>Every detection pattern, plus Luhn / Emirates-ID / IBAN checksum vectors</td></tr>
+      <tr><td><code>masker.test.js</code></td><td>6</td><td>All three masking modes, consistency, whitelist, line numbers</td></tr>
+      <tr><td><code>cli.test.js</code></td><td>4</td><td>Exit codes, mask-file round-trip, list-patterns</td></tr>
+      <tr><td><code>pdpl.test.js</code></td><td>6</td><td>Mapping drift-detection, article coverage, enrich, summarise, checksum badges</td></tr>
+      <tr><td><code>db.test.js</code></td><td>10</td><td>Driver inference, mock adapter, CLI db-scan / db-mask end-to-end</td></tr>
+      <tr><td><code>reporter.test.js</code></td><td>6</td><td>JSON, Markdown, HTML EN, HTML AR, <code>.kakashiignore</code>, no-raw-values invariant</td></tr>
+      <tr><td><code>i18n.test.js</code></td><td>8</td><td>Language resolution priority, <code>t()</code> substitution, live CLI EN + AR</td></tr>
+      <tr><td><code>guard.test.js</code></td><td>6</td><td><code>/health</code>, <code>/scan</code>, <code>/mask</code>, 404, missing-path, raw-value-leak invariant</td></tr>
+    </tbody>
+  </table>
+
+  <h3>12.1 CI integration</h3>
+  <pre><code>- name: Kakashi privacy scan
+  run: |
+    npm install -g @muhammadatef/kakashi
+    kakashi scan-dir . -f json -o kakashi-report.json
+- name: Upload compliance report
+  if: always()
+  uses: actions/upload-artifact@v4
+  with: { name: kakashi-report, path: kakashi-report.json }</code></pre>
+
+  <p>Because <code>kakashi scan-dir</code> exits <code>1</code> when findings are present, the pipeline can be configured to <em>fail</em> pull requests that leak new sensitive data — turning Kakashi into a pre-merge safety gate.</p>
+</section>
+
+<!-- =================================================================== 13 -->
+<section id="s13">
+  <h2>13 · Deployment &amp; operations</h2>
+
+  <h3>13.1 Install</h3>
+  <pre><code># macOS · Linux · WSL · Git Bash
+curl -fsSL https://raw.githubusercontent.com/Muhammadatef/kakashi/main/install.sh | bash
+
+# Windows (PowerShell 5.1+)
+irm https://raw.githubusercontent.com/Muhammadatef/kakashi/main/install.ps1 | iex
+
+# Or via npm directly
+npm install -g @muhammadatef/kakashi</code></pre>
+
+  <h3>13.2 System requirements</h3>
+  <div class="kv">
+    <div class="k">Runtime</div><div>Node.js ≥ 18</div>
+    <div class="k">OS</div><div>macOS, Linux, Windows (native + WSL)</div>
+    <div class="k">Disk footprint</div><div>&lt; 15 MB core; drivers are lazy-loaded on demand</div>
+    <div class="k">Memory (steady-state)</div><div>~40 MB agent-guard daemon; per-file scans are streaming</div>
+    <div class="k">Network</div><div>Zero during operation; one call to npm at install</div>
+  </div>
+
+  <h3>13.3 Uninstall</h3>
+  <pre><code>npx -y github:Muhammadatef/kakashi -- --uninstall            # all agents
+npx -y github:Muhammadatef/kakashi -- --uninstall --only cursor</code></pre>
+
+  <h3>13.4 Public dashboard</h3>
+  <p>A public adoption dashboard is deployed via GitHub Pages, fetching live npm and GitHub metrics client-side without any Kakashi-owned backend. See <code>docs/dashboard/index.html</code>.</p>
+</section>
+
+<!-- =================================================================== 14 -->
+<section id="s14">
+  <h2>14 · UAE framework alignment</h2>
+
+  <table>
+    <thead><tr><th>UAE framework</th><th>Alignment</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>UAE AI Strategy 2031</strong></td>
+        <td>Enables the 50%-of-government-services agentic-AI programme by removing the compliance risk that otherwise blocks deployment. Kakashi is the trust layer beneath the strategy.</td>
+      </tr>
+      <tr>
+        <td><strong>UAE AI Charter</strong> (10 June 2024)</td>
+        <td>Full alignment with all 12 principles. Kakashi is a rule-based safety layer, not itself an AI model, which inherently satisfies fairness, transparency, explainability, and accountability requirements.</td>
+      </tr>
+      <tr>
+        <td><strong>UAE PDPL — Federal Decree-Law 45 of 2021</strong></td>
+        <td>Every detection category explicitly mapped to specific articles (1, 5, 6, 9, 15, 20, 21, 22, 25) in <code>src/lib/pdpl-mapping.js</code>. The compliance report is audit-ready for the UAE Data Office.</td>
+      </tr>
+      <tr>
+        <td><strong>UAE Data Office guidance</strong></td>
+        <td>Default posture is "block the leak at source" — the strongest possible cross-border-transfer compliance stance.</td>
+      </tr>
+      <tr>
+        <td><strong>UAE Centennial 2071</strong></td>
+        <td>Sovereign, locally-developed, open-source (MIT) digital infrastructure. Directly serves the 2071 vision of homegrown sovereign technology.</td>
+      </tr>
+      <tr>
+        <td><strong>UAE Cybersecurity Strategy</strong></td>
+        <td>Zero-trust posture: no network calls, no cloud dependency, no telemetry, loopback-only daemon.</td>
+      </tr>
+      <tr>
+        <td><strong>OECD Principles for Trustworthy AI</strong></td>
+        <td>All five principles addressed: inclusive growth, human-centred values &amp; fairness, transparency &amp; explainability, robustness &amp; safety, accountability.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- =================================================================== 15 -->
+<section id="s15">
+  <h2>15 · Roadmap</h2>
+
+  <h4>v1.2 (planned Q4 2026)</h4>
+  <ul>
+    <li>Native MCP server package (<code>@muhammadatef/mcp-kakashi</code>) — agent-guard endpoints as first-class MCP tools</li>
+    <li>True <code>worker_threads</code> parallelism for 100 k+ file trees (CPU-bound XLSX/PDF workloads)</li>
+    <li>Real PDF round-trip masking (content-stream patching via <code>pdf-lib</code>)</li>
+    <li>Multi-run DOCX / PPTX secret handling (secrets that span format boundaries)</li>
+    <li>Additional national identifier formats: KSA, Egypt, India, EU</li>
+    <li>Streaming DOCX / PDF masking for gigabyte-scale documents</li>
+  </ul>
+
+  <h4>v1.3+ (research direction)</h4>
+  <ul>
+    <li>Optional local ML classifier for context-aware name detection (opt-in only, still 100% local)</li>
+    <li>Proxy-mode masking that transparently intercepts existing app → DB traffic</li>
+    <li>UAE Data Office direct submission integration for compliance report delivery</li>
+  </ul>
+</section>
+
+<!-- =================================================================== 16 -->
+<section id="s16">
+  <h2>16 · Appendix — CLI reference</h2>
+  <pre><code>kakashi scan &lt;file&gt;               Scan and report finding counts (agent-safe)
+kakashi mask &lt;file&gt;               Mask and reconstruct original format
+kakashi audit &lt;file&gt;              Full original → replacement mapping (verbose)
+kakashi mask-dir &lt;dir&gt; -r         Mask all supported files recursively
+kakashi scan-dir &lt;dir&gt;            Enterprise directory scanner with PDPL report
+kakashi db-scan &lt;conn&gt; -q ...     Scan DB query results (agent-safe)
+kakashi db-mask &lt;conn&gt; -q ...     Mask DB query to jsonl / json / csv
+kakashi db-audit &lt;conn&gt; -q ...    Verbose DB audit (deliberately verbose)
+kakashi agent-guard --watch &lt;d&gt;   Run loopback privacy daemon
+kakashi stats                     Cumulative session stats
+kakashi impact --write path       Privacy-preserving impact snapshot
+kakashi list-patterns             All active detection patterns
+
+Global flags:
+  --lang &lt;code&gt;               en | ar
+  --mode typed|redact|fake    Replacement style (default: typed)
+  --whitelist val1,val2       Values to never mask
+  --overwrite                 Replace original (asks confirmation)
+  --stdin                     Read from stdin
+  -v, --verbose               Per-finding previews (NOT agent-safe)
+
+Alias: k (e.g. k scan file.txt)</code></pre>
+</section>
+
+<!-- =================================================================== 17 -->
+<section id="s17">
+  <h2>17 · Appendix — pattern catalogue</h2>
+
+  <h4>ID &amp; Documents (9)</h4>
+  <p><code>national_id</code> Emirates ID (with Luhn) · <code>intl_phone</code> UAE Phone · <code>passport</code> Passport · <code>visa_id</code> Visa Number · <code>trade_lic</code> Trade License · <code>pobox</code> P.O. Box · <code>non_latin_name</code> Arabic Name · <code>unified_id</code> Unified ID · <code>uae_iban</code> UAE IBAN (with mod-97)</p>
+
+  <h4>Personal Info (9)</h4>
+  <p><code>email</code> Email · <code>phone</code> Phone · <code>ip</code> IP Address · <code>cc</code> Credit Card · <code>ssn</code> SSN / National ID · <code>dob</code> Date of Birth · <code>date</code> Date · <code>age</code> Age · <code>full_name</code> Full Name</p>
+
+  <h4>Credentials (17)</h4>
+  <p><code>jwt</code> JWT Token · <code>ssh_key</code> SSH Private Key · <code>aws_key</code> AWS Key · <code>openai_key</code> OpenAI Key · <code>anthropic</code> Anthropic Key · <code>hf_token</code> HuggingFace Token · <code>gh_token</code> GitHub Token · <code>slack</code> Slack Token · <code>stripe</code> Stripe Key · <code>bearer</code> Bearer Token · <code>db_conn</code> Database Connection · <code>databricks_token</code> Databricks Token · <code>databricks_host</code> Databricks Host · <code>s3_uri</code> S3 URI · <code>env_secret</code> Env Secret · <code>hex_secret</code> Hex Secret · <code>—</code> extensible</p>
+</section>
+
+<!-- =================================================================== 18 -->
+<section id="s18">
+  <h2>18 · Appendix — PDPL article map (excerpt)</h2>
+
+  <table>
+    <thead><tr><th>Article</th><th>Title (EN)</th><th>Title (AR)</th><th>Sample summary</th></tr></thead>
+    <tbody>
+      <tr><td><code>Art. 1</code></td><td>Definitions of Personal Data</td><td>تعريفات البيانات الشخصية</td><td>Any data relating to an identified or identifiable natural person.</td></tr>
+      <tr><td><code>Art. 5</code></td><td>Conditions for Processing</td><td>شروط معالجة البيانات الشخصية</td><td>Requires explicit consent or a defined lawful basis.</td></tr>
+      <tr><td><code>Art. 15</code></td><td>Sensitive Personal Data</td><td>البيانات الشخصية الحساسة</td><td>Special protections for biometric, health, identity documents.</td></tr>
+      <tr><td><code>Art. 20</code></td><td>Security of Personal Data</td><td>أمن البيانات الشخصية</td><td>Duty to implement technical and organisational measures.</td></tr>
+      <tr><td><code>Art. 21</code></td><td>Reporting a Data Breach</td><td>الإبلاغ عن انتهاك البيانات الشخصية</td><td>Duty to notify UAE Data Office within stipulated timeframes.</td></tr>
+      <tr><td><code>Art. 22</code></td><td>Cross-Border Transfer</td><td>نقل البيانات الشخصية عبر الحدود</td><td>Restricts transfer outside the UAE unless adequate protection exists.</td></tr>
+      <tr><td><code>Art. 25</code></td><td>Data Protection Officer</td><td>تعيين مسؤول حماية البيانات</td><td>Requires DPO for large-scale or sensitive processing.</td></tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top: 12pt; color: #667085; font-size: 9pt;">
+    Article summaries are condensed for engineering reference. The compliance officer remains responsible for consulting the original Arabic text of the Decree-Law, which is the legally binding version, and the executive regulations for final compliance sign-off.
+  </p>
+</section>
+
+<!-- =================================================================== FOOTER -->
+<section style="margin-top: 20pt; text-align: center; color: #667085; font-size: 9pt; page-break-inside: avoid;">
+  <hr style="border: 0; border-top: 0.5pt solid #d0d5dd; width: 60mm; margin: 20pt auto;">
+  <p>Kakashi · MIT licence · Made in the United Arab Emirates</p>
+  <p><a href="https://github.com/Muhammadatef/kakashi">github.com/Muhammadatef/kakashi</a> · <a href="https://www.npmjs.com/package/@muhammadatef/kakashi">npmjs.com/package/@muhammadatef/kakashi</a></p>
+  <p style="margin-top: 10pt; font-style: italic;">Every quantitative claim in this document is independently verifiable against the public open-source repository.</p>
+</section>
+
+</body>
+</html>

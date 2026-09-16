@@ -1,10 +1,10 @@
 {
   "name": "@muhammadatef/kakashi",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publishConfig": {
     "access": "public"
   },
-  "description": "Hide secrets, credentials, and personal data before they leave your machine — works in Claude Code, Cursor, Codex, and 20+ AI agents. 50+ file formats including PDF, Word, Excel, JSON, .env.",
+  "description": "Sovereign privacy layer for agentic AI. Detects Emirates ID, UAE IBAN, Arabic names, plus 30+ credential and PII patterns. Client-side DB masking (Postgres, MySQL, MongoDB, Snowflake, Databricks, SQLite). Bilingual EN/AR. Works in Claude Code, Cursor, Copilot, Codex, and 20+ agents. 50+ file formats. Zero network calls.",
   "author": "Mohamed Atef Fahmy <muhamedfahmy7474@gmail.com> (https://github.com/Muhammadatef)",
   "license": "MIT",
   "homepage": "https://github.com/Muhammadatef/kakashi",
@@ -21,7 +21,9 @@
   },
   "scripts": {
     "install-agents": "node bin/install.js",
-    "test": "node tests/run.js"
+    "test": "node tests/run.js",
+    "docs:pdf": "chromium --headless --disable-gpu --no-sandbox --no-pdf-header-footer --print-to-pdf=docs/TECHNICAL_IMPLEMENTATION.pdf --virtual-time-budget=5000 --run-all-compositor-stages-before-draw \"file://$PWD/docs/TECHNICAL_IMPLEMENTATION.html\"",
+    "docs:metrics": "node scripts/build-metric-evidence.js"
   },
   "dependencies": {
     "xlsx": "^0.18.5",
@@ -31,6 +33,14 @@
     "chalk": "^4.1.2",
     "ora": "^5.4.1",
     "glob": "^10.3.10"
+  },
+  "optionalDependencies": {
+    "pg": "^8.11.0",
+    "mysql2": "^3.6.0",
+    "mongodb": "^6.3.0",
+    "snowflake-sdk": "^1.9.0",
+    "@databricks/sql": "^1.7.0",
+    "better-sqlite3": "^11.0.0"
   },
   "engines": {
     "node": ">=18"
@@ -45,9 +55,27 @@
     "claude-code",
     "cursor",
     "codex",
+    "copilot",
+    "windsurf",
+    "cline",
     "skill",
     "agent",
+    "agentic-ai",
+    "mcp",
     "cli",
+    "uae",
+    "pdpl",
+    "emirates-id",
+    "arabic",
+    "database-masking",
+    "postgres",
+    "mongodb",
+    "sqlite",
+    "compliance",
+    "gdpr",
+    "hipaa",
+    "sox",
+    "dlp",
     "naruto"
   ],
   "files": [
@@ -60,6 +88,8 @@
     "INSTALL.md",
     "LICENSE",
     "README.md",
+    "README.ar.md",
+    "CHANGELOG.md",
     "logo-256.png",
     "logo-64.png",
     "install.sh",
