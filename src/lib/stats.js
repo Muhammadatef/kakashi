@@ -39,4 +39,44 @@ function recordMask(findings) {
   return stats;
 }
 
-module.exports = { STATS_DIR, STATS_FILE, loadStats, saveStats, recordMask };
+/**
+ * Produce a privacy-preserving impact snapshot suitable for voluntary
+ * contribution to the public adoption dashboard (B5).
+ *
+ * The snapshot contains ONLY:
+ *   - the cumulative counts already in stats.json (no filenames, no values)
+ *   - a coarse timestamp bucket (YYYY-MM, not YYYY-MM-DD, to blunt correlation)
+ *   - kakashi version + node platform (for stability metrics)
+ *
+ * There is no auto-submission. The user runs `kakashi impact --write path`
+ * and gets a JSON file they can inspect and voluntarily attach to a GitHub
+ * issue. Kakashi never phones home — this preserves the "zero network
+ * calls" guarantee while still giving the community a way to see aggregate
+ * impact if enough users choose to share.
+ */
+function impactSnapshot() {
+  const stats = loadStats();
+  const now = new Date();
+  return {
+    schema: 'kakashi.impact.v1',
+    generatedAt: now.toISOString(),
+    // Coarser bucket so a stream of contributions cannot be correlated by exact minute.
+    bucket: `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`,
+    filesMasked: stats.filesMasked || 0,
+    totalFindings: stats.totalFindings || 0,
+    byCategory: stats.byCategory || { id: 0, pii: 0, cred: 0 },
+    kakashiVersion: '1.1.0',
+    platform: process.platform, // linux | darwin | win32
+    // NOTE: no filenames, no paths, no directory names, no pattern-instance
+    // counts (only category totals). No user id, no machine id.
+  };
+}
+
+module.exports = {
+  STATS_DIR,
+  STATS_FILE,
+  loadStats,
+  saveStats,
+  recordMask,
+  impactSnapshot,
+};

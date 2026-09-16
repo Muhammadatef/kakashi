@@ -10,7 +10,17 @@ const { maskText } = require('../src/engine/masker');
 const { PATTERNS } = require('../src/engine/patterns');
 const formats = require('../src/engine/formats');
 const { printHeader, printFindings } = require('../src/lib/output');
-const { loadStats, recordMask } = require('../src/lib/stats');
+const { loadStats, recordMask, impactSnapshot } = require('../src/lib/stats');
+const dbEngine = require('../src/engine/db');
+const { scanDirectory } = require('../src/lib/scan-dir');
+const reporter = require('../src/lib/reporter');
+const { resolveLang } = require('../src/lib/i18n');
+
+// Resolve language early — before Commander formats any output — from either
+// the --lang flag (if present anywhere in argv) or the KAKASHI_LANG / LANG env.
+const langFlagIdx = process.argv.findIndex((a) => a === '--lang');
+const explicitLang = langFlagIdx > -1 ? process.argv[langFlagIdx + 1] : null;
+resolveLang(explicitLang);
 
 const BRAND = 'Kakashi';
 const CLI_NAME = 'kakashi';
@@ -122,7 +132,8 @@ function confirmOverwrite(filePath) {
 program
   .name('kakashi')
   .description('Mask PII and credentials before they leave your machine')
-  .version('1.0.0');
+  .version('1.1.0')
+  .option('--lang <code>', 'CLI language: en | ar (default: env LANG / KAKASHI_LANG)');
 
 program
   .command('scan <file>')
@@ -203,6 +214,263 @@ program
     process.exit(0);
   });
 
+// ---------------------------------------------------------------------------
+// Database masking — connect locally, mask locally, write locally.
+// The AI agent never receives the raw rows; it only sees the masked output.
+// ---------------------------------------------------------------------------
+
+async function runDbAction(conn, options, action) {
+  if (!options.query) {
+    console.error(chalk.red('Error: --query is required'));
+    process.exit(2);
+  }
+  const maskOpts = {
+    mode: options.mode || 'typed',
+    whitelist: options.whitelist ? options.whitelist.split(',').map((s) => s.trim()) : [],
+  };
+  const limit = options.limit ? parseInt(options.limit, 10) : 10000;
+
+  printHeader(`db:${dbEngine.inferDriver(conn)} — ${options.query.slice(0, 60)}${options.query.length > 60 ? '...' : ''}`, BRAND);
+
+  let stream;
+  try {
+    stream = dbEngine.streamMasked(conn, options.query, { maskOpts, limit });
+  } catch (err) {
+    console.error(chalk.red(`Error: ${err.message}`));
+    process.exit(2);
+  }
+
+  if (action === 'scan' || action === 'audit') {
+    // Aggregate all findings across all rows.
+    const allFindings = [];
+    let rows = 0;
+    try {
+      for await (const item of stream) {
+        rows++;
+        for (const f of item.findings) allFindings.push(f);
+      }
+    } catch (err) {
+      console.error(chalk.red(`Error running query: ${err.message}`));
+      process.exit(2);
+    }
+    console.log(chalk.gray(`   ${rows} row(s) scanned`));
+    printFindings(allFindings, {
+      cliName: CLI_NAME,
+      quiet: action === 'scan' ? !options.verbose : false,
+      showReplacement: action === 'audit',
+    });
+    process.exit(allFindings.length > 0 ? 1 : 0);
+  }
+
+  // action === 'mask'
+  const outPath = options.output || `masked_query.${options.format || 'jsonl'}`;
+  const format = options.format || 'jsonl';
+  const outStream = fs.createWriteStream(outPath);
+  let rows = 0;
+  let totalFindings = 0;
+  const byCat = { id: 0, pii: 0, cred: 0 };
+  const allFindings = [];
+  const headers = [];
+
+  try {
+    for await (const item of stream) {
+      rows++;
+      totalFindings += item.findings.length;
+      for (const f of item.findings) {
+        if (byCat[f.cat] != null) byCat[f.cat]++;
+        allFindings.push(f);
+      }
+      if (format === 'jsonl') {
+        outStream.write(JSON.stringify(item.masked) + '\n');
+      } else if (format === 'json') {
+        // Buffer until end — we'll wrap in an array.
+        outStream.write((rows === 1 ? '[\n  ' : ',\n  ') + JSON.stringify(item.masked));
+      } else if (format === 'csv') {
+        if (rows === 1) {
+          for (const k of Object.keys(item.masked)) headers.push(k);
+          outStream.write(headers.map(csvEscape).join(',') + '\n');
+        }
+        outStream.write(headers.map((h) => csvEscape(item.masked[h])).join(',') + '\n');
+      } else {
+        throw new Error(`Unsupported --format: ${format} (use jsonl|json|csv)`);
+      }
+    }
+    if (format === 'json') outStream.write('\n]\n');
+  } catch (err) {
+    console.error(chalk.red(`Error running query: ${err.message}`));
+    outStream.end();
+    process.exit(2);
+  }
+  // Wait for the write stream to fully flush before exiting — otherwise
+  // process.exit() can drop the tail of the buffered output on disk.
+  await new Promise((resolve, reject) => {
+    outStream.end(() => resolve());
+    outStream.on('error', reject);
+  });
+
+  if (allFindings.length > 0) recordMask(allFindings);
+  console.log(chalk.green(`\n[ok] Masked query results saved: ${outPath}`));
+  console.log(chalk.gray(`  ${rows} row(s) · ${totalFindings} replacement(s)`));
+  console.log(chalk.gray(`  (${byCat.id} ID & docs, ${byCat.pii} personal info, ${byCat.cred} credentials)\n`));
+  process.exit(0);
+}
+
+function csvEscape(v) {
+  if (v == null) return '';
+  const s = typeof v === 'string' ? v : JSON.stringify(v);
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+program
+  .command('db-scan <connection>')
+  .description('Scan query results from a database — counts only, nothing written (agent-safe)')
+  .requiredOption('-q, --query <sql>', 'SQL / JSON query to run against the database')
+  .option('--limit <n>', 'Cap on rows fetched (default 10000)')
+  .option('-v, --verbose', 'Show per-finding previews (NOT agent-safe)')
+  .action(async (conn, options) => {
+    await runDbAction(conn, options, 'scan');
+  });
+
+program
+  .command('db-audit <connection>')
+  .description('Full original->token mapping for every finding in query results (DELIBERATELY VERBOSE)')
+  .requiredOption('-q, --query <sql>', 'SQL / JSON query to run')
+  .option('--limit <n>', 'Cap on rows fetched (default 10000)')
+  .action(async (conn, options) => {
+    await runDbAction(conn, options, 'audit');
+  });
+
+program
+  .command('db-mask <connection>')
+  .description('Run a query, mask rows locally, write a safe copy (jsonl|json|csv)')
+  .requiredOption('-q, --query <sql>', 'SQL / JSON query to run')
+  .option('-o, --output <path>', 'Output path (default: masked_query.<fmt>)')
+  .option('-f, --format <fmt>', 'jsonl|json|csv', 'jsonl')
+  .option('-m, --mode <mode>', 'typed|redact|fake', 'typed')
+  .option('-w, --whitelist <vals>', 'Comma-separated values to skip')
+  .option('--limit <n>', 'Cap on rows fetched (default 10000)')
+  .action(async (conn, options) => {
+    await runDbAction(conn, options, 'mask');
+  });
+
+// ---------------------------------------------------------------------------
+// scan-dir — enterprise data-estate scan with PDPL-mapped compliance report.
+// ---------------------------------------------------------------------------
+program
+  .command('scan-dir <directory>')
+  .description('Recursively scan a directory and emit a PDPL-mapped compliance report (JSON | HTML | MD | text)')
+  .option('-f, --format <fmt>', 'json | html | md | text', 'text')
+  .option('-o, --output <path>', 'Write report to path instead of stdout')
+  .option('--parallel <n>', 'Concurrent file scans', '8')
+  .option('--no-gitignore', 'Do NOT honour .gitignore / .kakashiignore')
+  .option('--exclude <patterns>', 'Additional comma-separated glob patterns to exclude')
+  .option('--lang <lang>', 'Report language: en | ar (HTML only)', 'en')
+  .action(async (directory, options) => {
+    const extraIgnore = options.exclude ? options.exclude.split(',').map((s) => s.trim()) : [];
+    const concurrency = parseInt(options.parallel, 10) || 8;
+
+    console.error(chalk.cyan(`\n${BRAND} — scan-dir`));
+    console.error(chalk.gray(`   Root: ${directory}`));
+    console.error(chalk.gray(`   Concurrency: ${concurrency}\n`));
+
+    let report;
+    try {
+      report = await scanDirectory(directory, {
+        concurrency,
+        respectGitignore: options.gitignore !== false,
+        extraIgnore,
+        onFile: (fp, done, total) => {
+          if (done % 10 === 0 || done === total) {
+            process.stderr.write(`\r   Scanned ${done}/${total} file(s)…`);
+          }
+        },
+      });
+    } catch (err) {
+      console.error(chalk.red(`\nError: ${err.message}`));
+      process.exit(2);
+    }
+
+    process.stderr.write('\n\n');
+    const s = report.summary;
+    console.error(chalk.white(`   ${report.files.length} file(s) · ${s.total} finding(s)`));
+    console.error(chalk.gray(`   (${s.byCategory.id} ID & docs · ${s.byCategory.pii} personal info · ${s.byCategory.cred} credentials)`));
+    console.error(chalk.gray(`   Severity: ${s.bySeverity.critical} critical · ${s.bySeverity.high} high · ${s.bySeverity.medium} medium · ${s.bySeverity.low} low`));
+    console.error(chalk.gray(`   Duration: ${(report.durationMs / 1000).toFixed(2)}s\n`));
+
+    let rendered;
+    switch (options.format) {
+      case 'json': rendered = reporter.renderJson(report); break;
+      case 'html': rendered = reporter.renderHtml(report, { lang: options.lang || 'en' }); break;
+      case 'md':   rendered = reporter.renderMarkdown(report); break;
+      case 'text': rendered = reporter.renderMarkdown(report); break;
+      default:
+        console.error(chalk.red(`Unsupported --format: ${options.format} (use json|html|md|text)`));
+        process.exit(2);
+    }
+
+    if (options.output) {
+      fs.writeFileSync(options.output, rendered);
+      console.error(chalk.green(`[ok] Report written: ${options.output}`));
+    } else {
+      process.stdout.write(rendered);
+    }
+    process.exit(s.total > 0 ? 1 : 0);
+  });
+
+// ---------------------------------------------------------------------------
+// agent-guard — long-running local privacy sidecar for agentic AI.
+// ---------------------------------------------------------------------------
+program
+  .command('agent-guard')
+  .description('Run Kakashi as a local privacy daemon that any AI agent can consult before shipping data')
+  .requiredOption('--watch <dir>', 'Directory to watch for changes')
+  .option('--port <n>', 'Loopback HTTP port', String(8797))
+  .option('--host <h>', 'Bind host (must be loopback)', '127.0.0.1')
+  .option('--log <path>', 'Append JSONL audit events to this file')
+  .option('--auto-mask', 'Automatically write masked_<file> when scan finds anything')
+  .action(async (options) => {
+    const guard = require('../src/agent/guard');
+    let handle;
+    try {
+      handle = await guard.start({
+        watch: options.watch,
+        port: parseInt(options.port, 10),
+        host: options.host,
+        log: options.log,
+        autoMask: options.autoMask,
+        onEvent: (e) => {
+          if (e.kind === 'passive_scan' && e.findings > 0) {
+            console.log(chalk.yellow(`[guard] ${e.path} — ${e.findings} finding(s)`));
+          } else if (e.kind === 'auto_masked') {
+            console.log(chalk.green(`[guard] auto-masked → ${e.output}`));
+          } else if (e.kind === 'api_scan') {
+            console.log(chalk.gray(`[api] /scan ${e.path} → ${e.findings} finding(s)`));
+          } else if (e.kind === 'api_mask') {
+            console.log(chalk.gray(`[api] /mask ${e.path} → ${e.findings} replacement(s)`));
+          }
+        },
+      });
+    } catch (err) {
+      console.error(chalk.red(`agent-guard failed to start: ${err.message}`));
+      process.exit(2);
+    }
+
+    console.log(chalk.cyan(`\n${BRAND} — agent-guard`));
+    console.log(chalk.gray(`   watching: ${options.watch}`));
+    console.log(chalk.gray(`   http:     http://${options.host}:${handle.port}/health`));
+    if (options.log) console.log(chalk.gray(`   log:      ${options.log}`));
+    console.log(chalk.gray('   Ctrl-C to stop\n'));
+
+    const shutdown = async () => {
+      console.log(chalk.gray('\n[guard] stopping...'));
+      await handle.stop();
+      process.exit(0);
+    };
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
+  });
+
 program
   .command('stats')
   .description('Show cumulative masking stats')
@@ -215,6 +483,23 @@ program
     console.log(`   ID & Documents:  ${byCat.id || 0}`);
     console.log(`   Personal Info:   ${byCat.pii || 0}`);
     console.log(`   Credentials:     ${byCat.cred || 0}\n`);
+  });
+
+program
+  .command('impact')
+  .description('Print a privacy-preserving impact snapshot (voluntarily shareable — no auto-submission)')
+  .option('--write <path>', 'Write the JSON snapshot to a file instead of printing')
+  .action((options) => {
+    const snap = impactSnapshot();
+    const json = JSON.stringify(snap, null, 2);
+    if (options.write) {
+      fs.writeFileSync(options.write, json);
+      console.log(chalk.green(`[ok] Impact snapshot written: ${options.write}`));
+      console.log(chalk.gray('   This file is safe to attach to a GitHub issue.'));
+      console.log(chalk.gray('   No filenames, paths, values, or machine id are included.'));
+    } else {
+      console.log(json);
+    }
   });
 
 program
