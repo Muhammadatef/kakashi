@@ -1,4 +1,5 @@
 const chalk = require('chalk');
+const { t } = require('./i18n');
 
 const CAT_LABELS = {
   id: { tag: 'ID', title: 'ID & Documents' },
@@ -6,10 +7,18 @@ const CAT_LABELS = {
   cred: { tag: 'KEY', title: 'Credentials' },
 };
 
+function catShort(cat) {
+  // Translated short-form labels used in the counts-only line.
+  if (cat === 'id') return t('id_docs_short');
+  if (cat === 'pii') return t('personal_info_short');
+  if (cat === 'cred') return t('credentials_short');
+  return cat;
+}
+
 function printHeader(filePath, brand = 'Kakashi') {
   console.log('');
   console.log(chalk.cyan(`${brand}`));
-  console.log(chalk.gray(`   Scanning: ${filePath}`));
+  console.log(chalk.gray(`   ${t('scanning')}: ${filePath}`));
   console.log('');
 }
 
@@ -25,11 +34,12 @@ function printFindings(findings, { showReplacement = false, cliName = 'kakashi',
     // any value preview here would re-enter the agent's LLM context.
     const total = findings.length;
     const counts = ['id', 'pii', 'cred']
-      .map((cat) => `${byCat[cat].length} ${CAT_LABELS[cat].title.toLowerCase()}`)
+      .map((cat) => `${byCat[cat].length} ${catShort(cat)}`)
       .join(' · ');
-    console.log(chalk.white(`   ${total} finding${total === 1 ? '' : 's'}  (${counts})`));
+    const word = total === 1 ? t('finding_singular') : t('findings');
+    console.log(chalk.white(`   ${total} ${word}  (${counts})`));
     if (total > 0) {
-      console.log(chalk.gray(`   Run \`${cliName} mask <file>\` to apply (no previews shown — see \`${cliName} audit\` for full mapping).`));
+      console.log(chalk.gray('   ' + t('apply_hint', { cli: cliName })));
     }
     console.log('');
     return;
