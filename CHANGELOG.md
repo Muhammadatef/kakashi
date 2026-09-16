@@ -13,6 +13,10 @@ UAE national scale: native Emirates identifier detection, PDPL-mapped
 compliance reports, client-side database masking, a local privacy daemon for
 agentic AI, and full English + Arabic support.
 
+Also merges the community-contributed [`sql_password`](https://github.com/Muhammadatef/kakashi/pull/1)
+pattern from @lauraabdul that detects secrets in SQL `IDENTIFIED BY` /
+`WITH PASSWORD` / `ENCRYPTED BY` clauses — thank you.
+
 ### Added
 
 **Detection**

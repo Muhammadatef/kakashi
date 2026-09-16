@@ -35,7 +35,7 @@
 
 - **101 automated tests** across 8 test suites: patterns, masker, CLI, PDPL mapping, database drivers, compliance reporter, i18n, agent-guard daemon.
 - **Public on npm and GitHub** with MIT license: [`@muhammadatef/kakashi`](https://www.npmjs.com/package/@muhammadatef/kakashi).
-- **34 detection patterns** across three categories: ID & Documents (Emirates ID with Luhn checksum, UAE passport, UAE mobile/landline, UAE IBAN with mod-97 checksum, trade licence, unified ID, P.O. Box, Arabic name detection); Personal Info (email, phone, IP, credit card, DOB, full name); Credentials (OpenAI, Anthropic, AWS, GitHub, Stripe, Slack, HuggingFace, JWT, Bearer, SSH, DB connection strings, Databricks, S3 URIs, .env secrets, hex secrets). The `env_secret` pattern is a meta-rule that additionally matches 15+ credential naming conventions.
+- **35 detection patterns** across three categories: ID & Documents (Emirates ID with Luhn checksum, UAE passport, UAE mobile/landline, UAE IBAN with mod-97 checksum, trade licence, unified ID, P.O. Box, Arabic name detection); Personal Info (email, phone, IP, credit card, DOB, full name); Credentials (OpenAI, Anthropic, AWS, GitHub, Stripe, Slack, HuggingFace, JWT, Bearer, SSH, DB connection strings, SQL auth-clause passwords, Databricks, S3 URIs, .env secrets, hex secrets). The `env_secret` pattern is a meta-rule that additionally matches 15+ credential naming conventions.
 - **50+ file formats** with format-preserving masking: Word `.docx`, Excel `.xlsx`, PowerPoint `.pptx`, PDF, JSON/JSONL/JSON5, YAML, TOML, XML, Markdown, CSV, plus 40+ source-code extensions.
 - **6 database drivers** (PostgreSQL, MySQL, MongoDB, Snowflake, Databricks, SQLite) — mask rows in-flight from the client side, no cloud proxy.
 - **Bilingual CLI + reports** (English / Arabic) with RTL preservation.
@@ -100,7 +100,7 @@
 | Art. 1 (Personal Data) | Every PII pattern (email, phone, name, DOB, IP) |
 | Art. 5 (Conditions for Processing) | Consent-preserving masking — data owner controls what is exposed |
 | Art. 15 (Sensitive Personal Data) | Emirates ID, passport, unified ID, credit card, IBAN — all badged as "critical" severity |
-| Art. 20 (Security of Personal Data) | Every credential pattern (17 detection classes + 15+ env_secret naming conventions) |
+| Art. 20 (Security of Personal Data) | Every credential pattern (18 detection classes + 15+ env_secret naming conventions) |
 | Art. 21 (Breach Notification) | Every credential detection is a candidate breach event — surfaced in the compliance report |
 | Art. 22 (Cross-Border Transfer) | Every pattern that identifies a data subject is flagged as cross-border-restricted when destined for a foreign LLM |
 | Art. 25 (DPO Duties) | The HTML compliance report is designed to be handed directly to a DPO or the UAE Data Office |

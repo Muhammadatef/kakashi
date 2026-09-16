@@ -49,7 +49,7 @@ Kakashi is **not itself an artificial-intelligence system**. It is a determinist
 | | |
 | --- | --- |
 | Release date | September 2026 |
-| Detection patterns | 34 across three categories (ID & Documents, Personal Info, Credentials); env_secret matches 15+ credential naming conventions on top |
+| Detection patterns | 35 across three categories (ID & Documents, Personal Info, Credentials); env_secret matches 15+ credential naming conventions on top |
 | File formats | 50+ with format-preserving masking |
 | Database drivers | 6 native adapters (PostgreSQL, MySQL, MongoDB, Snowflake, Databricks, SQLite) |
 | Agentic platforms | 20+ pre-integrated agent skills |

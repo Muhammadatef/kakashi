@@ -14,7 +14,7 @@ flowchart TB
     SkillMD["SKILL.md / CLAUDE.md / AGENTS.md<br/>(tells the agent WHEN to scan)"]
   end
   subgraph L2 [Layer 2 - Core Engine]
-    Patterns["patterns.js<br/>(34 detection rules)"]
+    Patterns["patterns.js<br/>(35 detection rules)"]
     Masker["masker.js<br/>(tokenise + reconstruct)"]
     Formats["formats/<br/>(text, xlsx, docx, pptx, pdf)"]
     DB["engine/db/<br/>(6 driver adapters)"]
@@ -140,7 +140,7 @@ sequenceDiagram
 
 | Module | Purpose | Public API |
 | --- | --- | --- |
-| [src/engine/patterns.js](../src/engine/patterns.js) | 34 detection patterns, checksum helpers (Luhn, Emirates-ID, IBAN) | `PATTERNS`, `luhnCheck`, `isValidEmiratesId`, `isValidIban` |
+| [src/engine/patterns.js](../src/engine/patterns.js) | 35 detection patterns, checksum helpers (Luhn, Emirates-ID, IBAN) | `PATTERNS`, `luhnCheck`, `isValidEmiratesId`, `isValidIban` |
 | [src/engine/masker.js](../src/engine/masker.js) | Tokenise + reconstruct | `maskText(text, opts)` |
 | [src/engine/formats/](../src/engine/formats/) | Per-format read/write | `readFile`, `writeMasked` |
 | [src/engine/db/](../src/engine/db/) | Client-side DB masking | `streamMasked(conn, query, opts)` |
