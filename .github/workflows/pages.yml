@@ -35,6 +35,11 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # First-run auto-enable so we don't require a manual click in
+          # Settings → Pages → "Source: GitHub Actions" before the first
+          # deploy. Idempotent — no-op on subsequent runs.
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
