@@ -522,6 +522,14 @@ const BASE_PATTERNS = [
     labelAr: 'مفتاح Stripe',
     cat: 'cred',
     rx: /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{20,}\b/g,
+    // Deliberately `sk_test_`, not `sk_live_`, and self-describing.
+    //
+    // fakeValues are what `--mode fake` writes into a masked file, so they end
+    // up in files people commit. A `sk_live_`-shaped placeholder is treated as
+    // a real credential by GitHub push protection and every other secret
+    // scanner, which means the masked output -- the thing Kakashi produced to
+    // make the file safe to share -- would itself block the user's push. It
+    // also blocked this repository's own.
     fakeValues: ['sk_test_EXAMPLEplaceholderNOTAREALKEY'],
   },
   {
