@@ -1,5 +1,6 @@
 const { spawnSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const CLI = path.join(__dirname, '..', 'bin', 'kakashi.js');
@@ -68,6 +69,104 @@ function runCliTests() {
     if (content.includes('hunter2@prod.db.example.com')) throw new Error('conn string not masked');
     fs.unlinkSync(sqlMasked);
   });
+
+  // ---------------------------------------------------------------------------
+  // stdout must not be truncated when it is a pipe.
+  //
+  // `process.exit()` terminates immediately and discards whatever is still in
+  // the stdout buffer. On a pipe that buffer is 64 KiB, so a masked document or
+  // a JSON report larger than that was cut off mid-line -- while still exiting
+  // 0, so no caller could tell. The extra `| cat` matters: it is what makes the
+  // reader slow enough to leave bytes buffered at exit, and without it the bug
+  // does not reproduce.
+  //
+  // These shell out through a real pipeline on purpose. spawnSync's own stdio
+  // pipe drains differently and would pass either way.
+  // ---------------------------------------------------------------------------
+  const pipeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kakashi-pipe-'));
+
+  function shell(cmd) {
+    return spawnSync('sh', ['-c', cmd], { encoding: 'utf8' });
+  }
+
+  check('mask --stdin is not truncated through a pipe', () => {
+    const big = path.join(pipeDir, 'big.md');
+    let text = '';
+    for (let i = 0; i < 4000; i++) {
+      text += `line ${i} user${i}@example.com padding padding padding padding\n`;
+    }
+    fs.writeFileSync(big, text);
+
+    const expected = Number(shell(
+      `node ${CLI} mask --stdin /dev/stdin < ${big} 2>/dev/null | wc -c`,
+    ).stdout.trim());
+    const through = Number(shell(
+      `node ${CLI} mask --stdin /dev/stdin < ${big} 2>/dev/null | cat | wc -c`,
+    ).stdout.trim());
+
+    if (expected <= 65536) throw new Error('fixture too small to exercise the pipe buffer');
+    if (through !== expected) {
+      throw new Error(`masked output truncated through a pipe: ${through} of ${expected} bytes`);
+    }
+  });
+
+  check('scan-dir --format json is not truncated through a pipe', () => {
+    const fixtures = path.join(__dirname, 'fixtures');
+    const expected = Number(shell(
+      `node ${CLI} scan-dir ${fixtures} -f json 2>/dev/null | wc -c`,
+    ).stdout.trim());
+    const through = Number(shell(
+      `node ${CLI} scan-dir ${fixtures} -f json 2>/dev/null | cat | wc -c`,
+    ).stdout.trim());
+
+    if (expected <= 65536) throw new Error('fixture report too small to exercise the pipe buffer');
+    if (through !== expected) {
+      throw new Error(`json report truncated through a pipe: ${through} of ${expected} bytes`);
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // The JSON report is the one format meant for CI artefacts and SIEM ingestion,
+  // which makes it the worst place to ship the plaintext it found. HTML and
+  // Markdown never carried values; JSON now matches them unless asked otherwise.
+  // ---------------------------------------------------------------------------
+  check('scan-dir json redacts matched values by default', () => {
+    const out = path.join(pipeDir, 'report.json');
+    runCli(['scan-dir', path.join(__dirname, 'fixtures'), '-f', 'json', '-o', out]);
+    const report = JSON.parse(fs.readFileSync(out, 'utf8'));
+
+    if (report.valuesRedacted !== true) throw new Error('missing valuesRedacted marker');
+    let total = 0;
+    for (const file of report.files) {
+      for (const finding of file.findings) {
+        total++;
+        if ('original' in finding) {
+          throw new Error(`plaintext left in report: ${finding.id}`);
+        }
+        // What a reviewer actually needs must survive redaction.
+        if (!finding.id || !finding.severity || finding.line == null) {
+          throw new Error('redaction stripped locating metadata');
+        }
+      }
+    }
+    if (total === 0) throw new Error('no findings to check');
+
+    // Spot-check that a known fixture credential is genuinely absent.
+    const raw = fs.readFileSync(out, 'utf8');
+    if (raw.includes('Pr0d_P@55w0rd')) throw new Error('credential present in redacted report');
+  });
+
+  check('scan-dir json --include-values restores the plaintext', () => {
+    const out = path.join(pipeDir, 'report-values.json');
+    runCli(['scan-dir', path.join(__dirname, 'fixtures'), '-f', 'json', '--include-values', '-o', out]);
+    const report = JSON.parse(fs.readFileSync(out, 'utf8'));
+    const some = report.files.flatMap((f) => f.findings);
+    if (!some.some((x) => typeof x.original === 'string')) {
+      throw new Error('--include-values did not restore values');
+    }
+  });
+
+  fs.rmSync(pipeDir, { recursive: true, force: true });
 
   console.log(`cli.test.js: ${passed} passed, ${failed} failed`);
   return failed === 0;

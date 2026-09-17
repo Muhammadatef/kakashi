@@ -22,10 +22,36 @@
 const { ARTICLES } = require('./pdpl-mapping');
 
 // ---------------------------------------------------------------------------
-// JSON — trivial. Everything is already serialisable.
+// JSON — machine-readable, and REDACTED BY DEFAULT.
+//
+// A finding carries `original`: the matched plaintext. The HTML and Markdown
+// renderers have never emitted it -- they report id, line, severity and PDPL
+// article, which is what a reviewer needs. JSON used to serialise the report
+// wholesale, so the one format explicitly meant for CI artefacts and SIEM
+// ingestion was also the one that shipped every credential it found in
+// cleartext, off the machine, into systems with long retention.
+//
+// Everything needed to locate a finding stays: file, line, offset, pattern id,
+// severity, articles, and the stable token (`[EMAIL_3]`) it was replaced with.
+// Only the secret itself goes. `includeValues` restores the old behaviour for
+// callers who genuinely need the values and have accepted what that means.
 // ---------------------------------------------------------------------------
-function renderJson(report) {
-  return JSON.stringify(report, null, 2);
+function redactFinding(finding) {
+  const { original, ...safe } = finding;
+  return { ...safe, originalLength: typeof original === 'string' ? original.length : null };
+}
+
+function renderJson(report, options = {}) {
+  const { includeValues = false } = options;
+  const payload = includeValues ? report : {
+    ...report,
+    valuesRedacted: true,
+    files: (report.files || []).map((f) => ({
+      ...f,
+      findings: (f.findings || []).map(redactFinding),
+    })),
+  };
+  return JSON.stringify(payload, null, 2);
 }
 
 // ---------------------------------------------------------------------------

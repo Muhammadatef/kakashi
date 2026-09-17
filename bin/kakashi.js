@@ -25,6 +25,25 @@ resolveLang(explicitLang);
 const BRAND = 'Kakashi';
 const CLI_NAME = 'kakashi';
 
+/**
+ * Finish the process with `code` WITHOUT truncating anything already written to
+ * stdout.
+ *
+ * `process.exit()` terminates the process immediately and discards whatever is
+ * still sitting in the stdout buffer. When stdout is a pipe that buffer is 64
+ * KiB, so `kakashi mask --stdin | …` silently cut a masked document off
+ * mid-line, and `kakashi scan-dir -f json | jq` received a truncated report --
+ * both while exiting 0, so nothing downstream could detect the loss. Setting
+ * `exitCode` instead lets Node drain the stream and exit on its own once the
+ * event loop empties.
+ *
+ * Callers MUST return immediately after calling this; unlike process.exit() it
+ * does not stop execution.
+ */
+function finishWith(code) {
+  process.exitCode = code;
+}
+
 async function processFile(filePath, options, action) {
   if (!fs.existsSync(filePath)) {
     console.error(chalk.red(`Error: File not found: ${filePath}`));
@@ -51,11 +70,11 @@ async function processFile(filePath, options, action) {
         cliName: CLI_NAME,
         quiet: action === 'scan' ? !options.verbose : false,
       });
-      process.exit(findings.length > 0 ? 1 : 0);
+      return finishWith(findings.length > 0 ? 1 : 0);
     }
-    process.stdout.write(masked);
     if (findings.length > 0) recordMask(findings);
-    process.exit(0);
+    process.stdout.write(masked);
+    return finishWith(0);
   }
 
   let data;
@@ -72,7 +91,7 @@ async function processFile(filePath, options, action) {
     printHeader(filePath, BRAND);
     // Default: counts only (agent-safe). --verbose enables per-finding previews.
     printFindings(findings, { cliName: CLI_NAME, quiet: !options.verbose });
-    process.exit(findings.length > 0 ? 1 : 0);
+    return finishWith(findings.length > 0 ? 1 : 0);
   }
 
   if (action === 'audit') {
@@ -81,7 +100,7 @@ async function processFile(filePath, options, action) {
     // It deliberately echoes plaintext secrets, so don't run audit when an
     // AI agent will read the output unless you've already accepted that.
     printFindings(findings, { showReplacement: true, cliName: CLI_NAME });
-    process.exit(findings.length > 0 ? 1 : 0);
+    return finishWith(findings.length > 0 ? 1 : 0);
   }
 
   // mask
@@ -376,6 +395,7 @@ program
   .option('--no-gitignore', 'Do NOT honour .gitignore / .kakashiignore')
   .option('--exclude <patterns>', 'Additional comma-separated glob patterns to exclude')
   .option('--lang <lang>', 'Report language: en | ar (HTML only)', 'en')
+  .option('--include-values', 'JSON only: embed the matched plaintext in the report (NOT agent-safe — writes every detected secret into the output)')
   .action(async (directory, options) => {
     const extraIgnore = options.exclude ? options.exclude.split(',').map((s) => s.trim()) : [];
     const concurrency = parseInt(options.parallel, 10) || 8;
@@ -417,7 +437,14 @@ program
 
     let rendered;
     switch (options.format) {
-      case 'json': rendered = reporter.renderJson(report); break;
+      case 'json':
+        if (options.includeValues) {
+          console.error(chalk.yellow(
+            '   [warn] --include-values: this report contains every detected secret in cleartext.',
+          ));
+        }
+        rendered = reporter.renderJson(report, { includeValues: !!options.includeValues });
+        break;
       case 'html': rendered = reporter.renderHtml(report, { lang: options.lang || 'en' }); break;
       case 'md':   rendered = reporter.renderMarkdown(report); break;
       case 'text': rendered = reporter.renderMarkdown(report); break;
@@ -432,7 +459,7 @@ program
     } else {
       process.stdout.write(rendered);
     }
-    process.exit(s.total > 0 ? 1 : 0);
+    return finishWith(s.total > 0 ? 1 : 0);
   });
 
 // ---------------------------------------------------------------------------

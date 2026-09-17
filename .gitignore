@@ -33,3 +33,5 @@ Thumbs.db
 *.log
 logs/
 
+# Local-only working notes — never committed, never pushed.
+PROJECT_SUMMARY.md
