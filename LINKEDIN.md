@@ -3,13 +3,112 @@
 Internal draft. Customize before posting.
 
 > **Hero image:** attach `logo.png` (1024×1024) from the repo root — that's the Kakashi mask icon you'll use across all socials.
-> **v1.1 launch:** see the "Post option V1.1 (RECOMMENDED)" section below — it's tuned to announce the new UAE-native features, database masking, agent-guard daemon, and the UAE AI Award submission narrative in one post.
+> **Latest draft:** see "Post option V1.2 (RECOMMENDED — the Guardian release)" immediately below. It announces the Guardian loop, run-aware .docx/.pptx masking, and the now-proven database drivers. It carries a prerequisite: the branch must be merged and published first.
+>
+> **v1.1 launch:** see the "Post option V1.1" section — it announces the UAE-native features, database masking, agent-guard daemon, and the UAE AI Award narrative.
 
 ---
 
-## Post option V1.1 (RECOMMENDED — sovereign privacy launch)
+## Post option V1.2 (RECOMMENDED — the Guardian release)
 
-> **Best for:** announcing Kakashi v1.1.0, the sovereign-privacy release. Use immediately after the code hits main and the npm publish completes. Post before or right after submitting to the UAE AI Award so the "made in the UAE" narrative is timely.
+> **Best for:** announcing the Guardian, run-aware document masking, and proven
+> database masking.
+> **PREREQUISITE — do not post before both of these are true:**
+>   1. `feat/guardian-and-engine-correctness` is merged to `main`
+>   2. the npm publish of the new version has completed
+> As of this draft, neither has happened: `package.json` still reads 1.1.0 and the
+> CHANGELOG entry is still under `[Unreleased]`. Posting earlier sends people to an
+> `npm install` that gives them the previous release.
+> **Hook strategy:** open with the run-splitting problem (concrete, technical,
+> genuinely surprising), pivot to the Guardian as the systemic answer, close on
+> the sovereignty angle.
+
+---
+
+A Word document can hide an API key from your scanner. Not because it is encrypted — because Word cut it in half.
+
+Open any `.docx` and you will find the text stored as *runs*. Word starts a new run wherever anything changes: a bold character, a spellcheck mark, a language attribute, a revision id. A key like `sk-ant-api03-…` is routinely stored as two runs, split at an arbitrary point.
+
+Most extractors join those runs with a space. The moment they do, `sk-ant-` and `api03-…` stop being a credential and become two harmless-looking words. The scan comes back clean. The key is still there.
+
+**Kakashi now reassembles runs the way the format actually means them** — and, because a value spanning a run boundary never appears contiguously in the file, it replaces by offset rather than by string search. Formatting elsewhere in the paragraph is untouched.
+
+That fix is small. The reason it matters is what sits on top of it.
+
+🛡️ **Kakashi Guardian** — an autonomous protection loop. Not a pipeline. It holds a goal, observes the file, assesses risk from *context* (which agent is asking, where the data is going, which PDPL class is present), plans the **minimum necessary** protection, checks that plan against policy, applies it — then **re-reads its own output from disk and scans it again.** If anything prohibited survived, it escalates to a stronger transform and tries again. Decisions: `ALLOW`, `ALLOW_WITH_TRANSFORMATION`, `REQUIRE_APPROVAL`, `BLOCK`.
+
+No LLM. No agent framework. No new dependency. Deterministic, auditable, and it fails closed — nothing reaches the output path until the verifier has signed it off.
+
+🗄️ **Database masking, now proven.** The six drivers used to be tested against a mock. They now run against real databases in CI, and `--limit` executes **in the database** instead of after the fetch — 3 rows out of a 20-million-row query, in 2 seconds, instead of pulling the table into memory first.
+
+🇦🇪 **Arabic that reads as Arabic.** Two adjacent Arabic words used to be treated as a personal name, which meant ordinary Arabic prose was masked — `تقرير امتثال` is "compliance report", not a person. False positives on our own source dropped 48 → 19, with no real name lost.
+
+🔒 **Compliance reports redact by default.** The JSON report is the one built for CI and SIEM pipelines, so it was the worst possible place to embed the plaintext it had just found. It no longer does.
+
+**321 automated tests. 35 detection patterns. Zero network calls. MIT.**
+
+Sovereignty is not a slogan on a privacy tool. It is a property you have to be able to *check*. That is what the verify step is for.
+
+`npm install -g @muhammadatef/kakashi`
+
+Repo and changelog in the first comment.
+
+#AgenticAI #Privacy #OpenSource #Sovereignty #PDPL #AI #DeveloperTools #MadeInTheUAE #UAEAIAward
+
+---
+
+### First-comment template (paste right after publishing)
+
+```
+GitHub:    https://github.com/Muhammadatef/kakashi
+npm:       https://www.npmjs.com/package/@muhammadatef/kakashi
+CHANGELOG: https://github.com/Muhammadatef/kakashi/blob/main/CHANGELOG.md
+
+The Guardian in one command:
+  kakashi guard report.docx --destination external_model
+
+It will tell you what it found, what it plans to do, what it actually did,
+and what was still detectable afterwards. If it cannot make the file safe,
+it blocks and writes nothing.
+```
+
+### Alternative hook lines (A/B test these)
+
+- "A Word document can hide an API key from your scanner. Not because it is encrypted — because Word cut it in half."
+- "I stopped trusting my own masking tool. So I made it check its own work."
+- "Most privacy tools mask and exit. They never look at what they produced. Kakashi Guardian re-reads its own output and disagrees with itself when it has to."
+- "`تقرير امتثال` means 'compliance report'. Our tool used to mask it as a person's name. That is what happens when Arabic is an afterthought."
+
+### Honesty notes before posting
+
+- Do **not** claim other DLP tools miss the run-split case without checking. Several
+  handle it. The honest claim is that it is a subtle failure mode and Kakashi now
+  handles it correctly — not that it is unique in doing so.
+- The run-splitting weakness existed in **v1.1.0, which is live on npm.** If you
+  reference the fix publicly, add a security note to the CHANGELOG first so anyone
+  on 1.1.0 knows to upgrade. Decide that before posting, not after.
+- Every number above is measured, not estimated:
+  - **321 tests** = the full suite. 319 run anywhere; 2 need a Postgres and are
+    reported as skipped without one, never as passed.
+  - **48 → 19** and **211 → 175** = `kakashi scan-dir src`, where every hit is a
+    false positive by definition because the source contains no real personal data.
+  - **20M rows / 2s** = the Postgres `generate_series` integration test, which is
+    the proof that `--limit` executes server side.
+  - **35 patterns** = `require('./src/engine/patterns').PATTERNS.length`.
+
+### Assets to attach
+
+| Asset | Purpose |
+| --- | --- |
+| Terminal recording of `kakashi guard` escalating (verify FAIL → replan → PASS) | The single most convincing asset — it shows the loop changing its mind |
+| Screenshot of the OBSERVE/ASSESS/PLAN/VERIFY output with PDPL articles | Shows the audit trail a DPO would want |
+| Before/after of a split-run `.docx` (runs visible in the XML) | Makes the hook concrete |
+
+---
+
+## Post option V1.1 (superseded by V1.2 — sovereign privacy launch)
+
+> **Best for:** announcing Kakashi v1.1.0, the sovereign-privacy release. Already shipped — kept for reference and for reusable hook lines. Post before or right after submitting to the UAE AI Award so the "made in the UAE" narrative is timely.
 > **Hook strategy:** open with a real-world catch (the leaked API key we found on a live UAE stack yesterday), pivot to what shipped, close with the award angle.
 
 ---
