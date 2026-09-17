@@ -265,6 +265,73 @@ function runPatternTests() {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Name precision.
+  //
+  // `full_name` and `non_latin_name` are necessarily broad — a name is just
+  // words — and used to fire on any two capitalised words and any two adjacent
+  // Arabic words. That made every document heading a "person" and, worse, made
+  // ALL Arabic prose a personal name: `تقرير امتثال` is "compliance report".
+  //
+  // The gate rejects a match only when EVERY token is an ordinary word of the
+  // language, so one unfamiliar token — what a real name almost always
+  // contributes — keeps it. The asymmetry is deliberate: a missed name is a
+  // disclosure, a masked heading is an annoyance.
+  //
+  // RECALL CASES MATTER MOST HERE. If one of the `true` rows below ever starts
+  // failing, the tool has begun leaking names, which is worse than every false
+  // positive this gate was added to remove.
+  // ---------------------------------------------------------------------------
+  const namePrecisionCases = [
+    // [text, patternId, shouldMatch, why]
+    // --- recall: real names must survive ---
+    ['Ahmed Hassan', 'full_name', true, 'ordinary two-word personal name'],
+    ['Sara Al Nuaimi', 'full_name', true, 'three-part Gulf name'],
+    ['Contact Ahmed Hassan today', 'full_name', true, 'name inside a sentence'],
+    ['Name: Mark Price', 'full_name', true, 'name of ordinary words, rescued by the cue'],
+    ['Customer: May Day', 'full_name', true, 'calendar words as a name, rescued by the cue'],
+    ['محمد أحمد', 'non_latin_name', true, 'ordinary Arabic personal name'],
+    ['محمد بن راشد', 'non_latin_name', true, 'nasab particle بن is decisive'],
+    ['عبد الله', 'non_latin_name', true, 'theophoric name built from common words'],
+    ['العميل محمد أحمد المنصوري', 'non_latin_name', true, 'name preceded by a common noun'],
+    // --- precision: ordinary prose must not be a person ---
+    ['Core Rule', 'full_name', false, 'heading, both words ordinary'],
+    ['Database Connection', 'full_name', false, 'technical label'],
+    ['Data Protection Officer', 'full_name', false, 'compliance vocabulary'],
+    ['Quarterly Report', 'full_name', false, 'document title'],
+    ['## Personal Data Protection', 'full_name', false, 'markdown heading'],
+    ['تقرير امتثال', 'non_latin_name', false, 'Arabic for "compliance report"'],
+    ['البيانات الشخصية', 'non_latin_name', false, 'Arabic for "personal data"'],
+    ['حماية البيانات', 'non_latin_name', false, 'Arabic for "data protection"'],
+  ];
+
+  for (const [text, id, shouldMatch, why] of namePrecisionCases) {
+    const hit = maskText(text).findings.some((f) => f.id === id);
+    if (hit === shouldMatch) {
+      passed++;
+    } else {
+      const verb = shouldMatch ? 'MISSED (recall regression — this leaks)' : 'over-matched';
+      console.error(`FAIL name precision: ${verb} ${JSON.stringify(text)} [${id}] — ${why}`);
+      failed++;
+    }
+  }
+
+  // The gate must never reject on vocabulary alone when a cue is present, and
+  // must never accept an all-ordinary match without one.
+  {
+    const { looksLikeName, COMMON_EN } = require('../src/engine/patterns');
+    const cueText = 'Employee: Price Index';
+    const plainText = 'Some Price Index';
+    const cueOk = looksLikeName(['Price', 'Index'], COMMON_EN, cueText, cueText.indexOf('Price'));
+    const plainOk = looksLikeName(['Price', 'Index'], COMMON_EN, plainText, plainText.indexOf('Price'));
+    if (cueOk === true && plainOk === false) {
+      passed++;
+    } else {
+      console.error(`FAIL looksLikeName cue override: cue=${cueOk} plain=${plainOk}`);
+      failed++;
+    }
+  }
+
   console.log(`patterns.test.js: ${passed} passed, ${failed} failed`);
   return failed === 0;
 }

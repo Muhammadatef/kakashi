@@ -1,3 +1,5 @@
+const { sqlWithLimit } = require('./limit');
+
 /**
  * MySQL / MariaDB driver adapter.
  *
@@ -7,7 +9,7 @@
  * Connection string: mysql://user:pass@host:port/db
  */
 
-async function* query(conn, sql) {
+async function* query(conn, sql, options = {}) {
   let mysql;
   try {
     mysql = require('mysql2/promise');
@@ -17,7 +19,7 @@ async function* query(conn, sql) {
 
   const connection = await mysql.createConnection(conn);
   try {
-    const [rows] = await connection.execute(sql);
+    const [rows] = await connection.execute(sqlWithLimit(sql, options.limit));
     for (const row of rows) {
       yield row;
     }

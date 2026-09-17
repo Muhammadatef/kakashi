@@ -17,6 +17,7 @@
  */
 
 const { maskText } = require('../masker');
+const { sqlWithLimit } = require('./limit');
 
 const DRIVERS = {
   postgres:   () => require('./postgres'),
@@ -115,7 +116,10 @@ async function* streamMasked(conn, query, options = {}) {
   const counters = {};
 
   let count = 0;
-  for await (const row of driver.query(conn, query, options)) {
+  // `limit` is passed to the driver so it can cap the query at the SERVER (see
+  // ./limit.js), and re-checked here as a second line of defence for drivers
+  // that cannot push it down.
+  for await (const row of driver.query(conn, query, { ...options, limit })) {
     if (count >= limit) break;
     count++;
     // Serialise the row so text-based patterns can match values regardless
