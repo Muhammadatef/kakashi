@@ -10,6 +10,7 @@
  */
 
 const profiles = require('./profiles');
+const { TaskAnalyzer } = require('./task');
 
 /**
  * Where the data could go once released. Ordered least → most exposed; the risk
@@ -33,7 +34,9 @@ class GuardianContext {
    * @param {object} opts
    * @param {string} opts.resource — path to the resource under consideration
    * @param {string} [opts.requestingAgent] — agent id; unknown ids get the conservative profile
-   * @param {string} [opts.task] — free-text purpose, used for explainability (and, from M4, for semantics)
+   * @param {string} [opts.task] — free-text purpose. Sanitised, then read by the
+   *   TaskAnalyzer to narrow the plan. Agent-supplied, so it can only ever make
+   *   the protection stricter — see task.js.
    * @param {string} [opts.destination] — a DESTINATIONS id
    * @param {string} [opts.policy] — a POLICIES id
    * @param {string[]} [opts.approvals] — classes a human has already signed off on
@@ -42,7 +45,10 @@ class GuardianContext {
     if (!opts.resource) throw new Error('GuardianContext: resource is required');
     this.resource = String(opts.resource);
     this.requestingAgent = profiles.resolve(opts.requestingAgent);
-    this.task = opts.task ? String(opts.task) : null;
+    // The task is analysed once, here, so every stage downstream reads the same
+    // understanding of it rather than re-parsing the string.
+    this.taskAnalysis = TaskAnalyzer.analyze(opts.task);
+    this.task = this.taskAnalysis.task;
     this.destination = resolveDestination(opts.destination);
     this.policy = opts.policy ? String(opts.policy) : 'default';
     // Approvals are supplied by the caller (a human). The Guardian never mints
@@ -66,6 +72,8 @@ class GuardianContext {
       agentRecognised: this.requestingAgent.recognised,
       agentTrust: this.requestingAgent.trust,
       task: this.task,
+      taskIntent: this.taskAnalysis.intentId,
+      taskRecognised: this.taskAnalysis.recognised,
       destination: this.destination.id,
       networkAccess: this.networkAccess,
       policy: this.policy,

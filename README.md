@@ -491,9 +491,9 @@ Directories & databases
 
 Agentic
   kakashi guard  <file>        Autonomously protect a file for a given agent,
-                               task and destination — observe → assess → plan →
-                               act → verify → replan. Returns a decision:
-                               ALLOW / ALLOW_WITH_TRANSFORMATION /
+                               task and destination — observe → understand task
+                               → assess → plan → act → verify → replan. Returns
+                               a decision: ALLOW / ALLOW_WITH_TRANSFORMATION /
                                REQUIRE_APPROVAL / BLOCK
   kakashi agent-guard          Run as a local privacy daemon any agent can consult
 
@@ -508,6 +508,9 @@ Flags:
   --output path/to/masked/     Output path
   --overwrite                  Replace original (asks confirmation)
   --stdin                      Read from stdin, write to stdout
+  --task "<purpose>"           `guard` only: what the file is needed for. Narrows
+                               protection to that purpose — it can only make the
+                               result stricter, never weaker
   -v, --verbose                Show per-finding previews on `scan`
                                (NOT agent-safe — default is counts-only)
 

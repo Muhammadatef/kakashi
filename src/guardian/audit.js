@@ -49,9 +49,14 @@ function buildEvent({ state, decision }) {
     agentTrust: state.context.requestingAgent.trust,
     destination: state.context.destination.id,
     policy: state.context.policy,
-    // Free text the CALLER supplied. It is echoed for traceability and is not
-    // parsed, trusted, or allowed to influence any decision.
+    // Free text the CALLER supplied, sanitised and capped. It is never trusted
+    // as an instruction; the only thing read out of it is the intent below, and
+    // that can only make the protection stricter (guardian/task.js).
     task: state.context.task,
+    taskIntent: state.context.taskAnalysis.intentId,
+    taskRecognised: state.context.taskAnalysis.recognised,
+    taskMatchedKeywords: [...state.context.taskAnalysis.matchedKeywords],
+    taskUnnecessaryClasses: state.context.taskAnalysis.unnecessaryClasses,
 
     // What was found -- classes and counts.
     resourceType: first ? first.resourceType : null,

@@ -10,6 +10,7 @@ const { runReporterTests } = require('./reporter.test');
 const { runI18nTests } = require('./i18n.test');
 const { runGuardTests } = require('./guard.test');
 const { runGuardianTests } = require('./guardian.test');
+const { runTaskTests } = require('./task.test');
 
 (async () => {
   let ok = true;
@@ -25,6 +26,7 @@ const { runGuardianTests } = require('./guardian.test');
   ok = runI18nTests() && ok;
   ok = (await runGuardTests()) && ok;
   ok = (await runGuardianTests()) && ok;
+  ok = (await runTaskTests()) && ok;
 
   console.log(ok ? '\nAll tests passed.' : '\nSome tests failed.');
   process.exit(ok ? 0 : 1);

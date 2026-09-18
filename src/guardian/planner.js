@@ -16,10 +16,13 @@
  *    mechanism by which iteration N+1 differs from iteration N. Without state
  *    this module would return the same plan forever.
  *
- * The utility heuristic lives here for the MVP. Milestone 4 extracts it into a
- * `TaskAnalyzer` interface (deterministic first, optional local model later) that
- * proposes which classes the task actually needs. Whatever produces the proposal,
- * it stays upstream of the PolicyGuard and can always be overruled by it.
+ * 3. PURPOSE. `guardian/task.js` reads the stated task and says, per class,
+ *    whether this purpose needs values to stay distinguishable, to keep their
+ *    shape, or not at all. That proposal only reorders the ladder below -- it
+ *    stays upstream of the PolicyGuard, it can always be overruled by it, and by
+ *    construction it can only pick a tool at least as destructive as the one the
+ *    baseline would have picked. An unrecognised or absent task reproduces the
+ *    baseline exactly.
  */
 
 const { Action, ProtectionPlan, TRANSFORM_LADDER, TOOLS } = require('./actions');
@@ -49,36 +52,67 @@ function chooseTool({ cls, goal, context, state, residue = [] }) {
 
   // This class did its job last time: carry the same tool forward unchanged.
   if (lastTool && !residue.includes(cls) && permitted.includes(lastTool) && !refused.includes(lastTool)) {
-    return { tool: lastTool, exhausted: false, stable: true, permitted, tried, refused };
+    return {
+      tool: lastTool,
+      exhausted: false,
+      stable: true,
+      need: context.taskAnalysis ? context.taskAnalysis.needFor(cls) : null,
+      permitted,
+      tried,
+      refused,
+    };
   }
 
-  const ladder = goal.preserveTaskUtility
-    ? TRANSFORM_LADDER
-    : [...TRANSFORM_LADDER].reverse();
+  // What the purpose needs of this class, if a purpose was stated and understood.
+  const analysis = context.taskAnalysis;
+  const need = analysis ? analysis.needFor(cls) : null;
+
+  let ladder;
+  if (!goal.preserveTaskUtility) {
+    // Utility is switched off: take the most destructive tool available.
+    ladder = [...TRANSFORM_LADDER].reverse();
+  } else if (analysis) {
+    // Task-informed when the task was understood; identical to TRANSFORM_LADDER
+    // when it was not, so an unparsed task changes nothing.
+    ladder = analysis.preferenceFor(cls);
+  } else {
+    ladder = [...TRANSFORM_LADDER];
+  }
 
   const candidates = ladder.filter((t) => permitted.includes(t)
     && !tried.includes(t)
     && !refused.includes(t));
 
   if (candidates.length > 0) {
-    return { tool: candidates[0], exhausted: false, stable: false, permitted, tried, refused };
+    return { tool: candidates[0], exhausted: false, stable: false, need, permitted, tried, refused };
   }
 
   // Every permitted transform for this class has been tried or refused. The
   // planner cannot do better; it says so rather than silently repeating itself,
   // and the loop terminates instead of burning iterations.
-  return { tool: null, exhausted: true, stable: false, permitted, tried, refused };
+  return {
+    tool: null,
+    exhausted: true,
+    stable: false,
+    need: context.taskAnalysis ? context.taskAnalysis.needFor(cls) : null,
+    permitted,
+    tried,
+    refused,
+  };
 }
 
 /**
  * Why this class is being transformed. Ordered most-specific first so the
  * explanation the human reads names the actual trigger, not a generic one.
  */
-function reasonFor({ cls, tried, refused, stable, residue, prohibited }) {
+function reasonFor({ cls, tried, refused, stable, residue, prohibited, need }) {
   if (!stable && tried.length > 0) return 'ESCALATED_AFTER_VERIFICATION_FAILURE';
   if (!stable && refused.length > 0) return 'ESCALATED_AFTER_POLICY_REJECTION';
   if (!stable && residue.includes(cls)) return 'RESIDUE_AFTER_VERIFICATION';
   if (prohibited.includes(cls)) return 'PROHIBITED_AT_DESTINATION';
+  // The policy only restricts this class, and the stated purpose has no use for
+  // it -- say so, because that is the reason it is being destroyed outright.
+  if (need === 'NOT_REQUIRED') return 'NOT_REQUIRED_FOR_TASK';
   return 'RESTRICTED_AT_DESTINATION';
 }
 
@@ -121,7 +155,7 @@ const Planner = {
     const exhaustedClasses = [];
 
     for (const cls of targets) {
-      const { tool, exhausted, stable, tried, refused } = chooseTool({ cls, goal, context, state, residue });
+      const { tool, exhausted, stable, tried, refused, need } = chooseTool({ cls, goal, context, state, residue });
       if (exhausted) {
         exhaustedClasses.push(cls);
         continue;
@@ -129,8 +163,8 @@ const Planner = {
       actions.push(new Action({
         tool,
         targetClass: cls,
-        reasonCode: reasonFor({ cls, tried, refused, stable, residue, prohibited: rules.prohibited }),
-        parameters: { previousTools: tried },
+        reasonCode: reasonFor({ cls, tried, refused, stable, residue, prohibited: rules.prohibited, need }),
+        parameters: { previousTools: tried, taskNeed: need || null },
       }));
     }
 
@@ -158,6 +192,7 @@ const Planner = {
 
     return new ProtectionPlan(actions, {
       iteration: state.iteration,
+      taskIntent: context.taskAnalysis ? context.taskAnalysis.intentId : null,
       destination: rules.destinationId,
       policy: rules.policyId,
       riskLevel: assessment.level,

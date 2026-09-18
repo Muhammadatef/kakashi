@@ -482,9 +482,9 @@ program
 // ---------------------------------------------------------------------------
 program
   .command('guard <file>')
-  .description('Autonomously protect a file for a specific agent, task and destination (observe → assess → plan → act → verify → replan)')
+  .description('Autonomously protect a file for a specific agent, task and destination (observe → understand task → assess → plan → act → verify → replan)')
   .option('-a, --agent <id>', 'Requesting agent: claude|cursor|codex|windsurf|cline|copilot|continue|local_model (default: unknown)', 'unknown')
-  .option('-t, --task <text>', 'What the agent is trying to accomplish (recorded and explained; never trusted as instruction)')
+  .option('-t, --task <text>', 'What the agent needs the file for. Read to narrow the plan to that purpose — it can only make protection stricter, never weaker')
   .option('-d, --destination <id>', 'local|local_model|known_external|external_model|unknown', 'external_model')
   .option('-p, --policy <id>', 'Policy id', 'default')
   .option('-o, --output <path>', 'Artifact path (default: guarded_<file>)')
@@ -531,6 +531,7 @@ program
         releasePath: result.releasePath,
         risk: result.risk,
         iterations: result.iterations,
+        task: result.state.context.taskAnalysis.toJSON(),
         verificationPassed: result.auditEvent.verificationPassed,
         approvalsNeeded: result.approvalsNeeded,
         event: result.auditEvent,

@@ -411,10 +411,13 @@ async function runGuardianTests() {
     if (fs.existsSync(out)) fs.unlinkSync(out);
     const before = sha(EMPLOYEES);
 
+    // Deliberately NO task. With a stated purpose the planner starts from the
+    // tool that purpose needs and reaches a safe artifact in one pass (the test
+    // below pins that). Without one it can only climb the ladder from the least
+    // destructive tool -- which is the escalation path this test exists to prove.
     const result = await runGuardian({
       resource: EMPLOYEES,
       agent: 'cursor',
-      task: 'calculate average salary by age group',
       destination: 'external_model',
       output: out,
       auditLog: path.join(tmp, 'audit.jsonl'),
@@ -452,7 +455,7 @@ async function runGuardianTests() {
 
     // Utility survived: the task needs age groups, departments and salaries.
     assert(artifact.includes('Engineering') && artifact.includes('28000'), 'salary/department must survive');
-    assert(artifact.includes('14/03/1988'), 'DOB must survive — the task groups by age');
+    assert(artifact.includes('14/03/1988'), 'DOB must survive — it is permitted at this destination');
 
     // The original is untouched.
     assert.strictEqual(sha(EMPLOYEES), before, 'the original resource must never be modified');
@@ -616,10 +619,18 @@ async function runGuardianTests() {
     assert.strictEqual(events[0].schema, 'kakashi.guardian.v1');
     assert.strictEqual(events[0].decision, 'ALLOW_WITH_TRANSFORMATION');
     assert.strictEqual(events[0].verificationPassed, true);
-    assert.strictEqual(events[0].iterations, 2);
+    assert.strictEqual(events[0].iterations, 1);
     assert.strictEqual(events[0].prohibitedValuesReleased, 0);
     assert(events[0].reasonCodes.includes('GOVERNMENT_IDENTIFIER_DETECTED'));
     assert(Array.isArray(events[0].actions) && events[0].actions.length > 0);
+
+    // The understood purpose is recorded as ids, never as matched data.
+    assert.strictEqual(events[0].taskIntent, 'analytics');
+    assert.strictEqual(events[0].taskRecognised, true);
+    assert.deepStrictEqual(events[0].taskUnnecessaryClasses, ['CREDENTIAL']);
+    // The run with no task states that plainly rather than omitting the field.
+    assert.strictEqual(events[1].taskIntent, null);
+    assert.strictEqual(events[1].taskRecognised, false);
   });
 
   await check('AUDIT: a blocked run is recorded and releases nothing', async () => {

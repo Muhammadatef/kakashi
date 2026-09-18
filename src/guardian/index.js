@@ -135,6 +135,12 @@ async function runGuardian(opts = {}) {
       state.addObservation(observation);
       emit({ kind: 'observe', iteration, observation: observation.toJSON() });
 
+      // --- UNDERSTAND TASK --------------------------------------------------
+      // Analysed once when the context was built; recorded here so the run log
+      // shows the stage, and emitted so a streaming caller sees it in order.
+      state.record(STATUS.UNDERSTANDING_TASK, 'analyze_task');
+      emit({ kind: 'task', iteration, analysis: context.taskAnalysis.toJSON() });
+
       // --- ASSESS -----------------------------------------------------------
       state.record(STATUS.ASSESSING, 'assess_risk');
       const assessment = RiskEngine.assess({ observation, context });

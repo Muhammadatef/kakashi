@@ -87,6 +87,59 @@ function observeSection(observation) {
   return lines.join('\n');
 }
 
+/** Human labels for what a purpose needs of a class. */
+const NEED_TEXT = {
+  REQUIRED_DISTINCT: 'needed, values must stay distinguishable',
+  REQUIRED_SHAPE:    'needed, values must keep their shape',
+  NOT_REQUIRED:      'not needed by this task',
+};
+
+/**
+ * UNDERSTAND TASK -- what the Guardian made of the stated purpose, and what that
+ * changes. Printed even when nothing was understood, because "I did not
+ * understand your task, so I narrowed nothing" is the part a reader must not
+ * have to infer from an absent section.
+ */
+function taskSection(analysis, observation) {
+  if (!analysis) return '';
+  const lines = [];
+  lines.push(chalk.white('UNDERSTAND TASK'));
+
+  if (!analysis.stated) {
+    lines.push(chalk.yellow('   No task stated — purpose limitation cannot be applied.'));
+    lines.push(chalk.gray('   Pass --task "<what you need the file for>" to narrow the plan.'));
+    lines.push('');
+    return lines.join('\n');
+  }
+
+  if (!analysis.recognised) {
+    lines.push(chalk.gray('   Task:    ') + analysis.task);
+    lines.push(chalk.yellow('   Purpose not recognised — falling back to conservative defaults.'));
+    lines.push('');
+    return lines.join('\n');
+  }
+
+  lines.push(chalk.gray('   Purpose: ') + analysis.label
+    + chalk.gray(` (matched: ${analysis.matchedKeywords.slice(0, 4).join(', ')})`));
+
+  // Only classes actually present in this resource are worth listing. `result`
+  // carries the observation's JSON projection, which has `classes` but not the
+  // `presentClasses` getter, so derive it from the projection either way.
+  const present = observation && observation.classes
+    ? Object.keys(observation.classes).filter((c) => observation.classes[c].count > 0)
+    : [];
+  for (const cls of present) {
+    const need = analysis.needFor(cls);
+    if (!need) continue;
+    const text = NEED_TEXT[need] || need;
+    const colour = need === 'NOT_REQUIRED' ? chalk.yellow : chalk.gray;
+    lines.push(`     ${cls.padEnd(24)} ${colour(text)}`);
+  }
+  lines.push(chalk.gray('   A stated task can only make protection stricter, never weaker.'));
+  lines.push('');
+  return lines.join('\n');
+}
+
 function assessSection(risk) {
   const lines = [];
   lines.push(chalk.white('ASSESS'));
@@ -195,6 +248,7 @@ function decisionSection(result) {
 function renderRun(result, context) {
   const parts = [header(result, context)];
   if (result.observation) parts.push(observeSection(result.observation));
+  if (context.taskAnalysis) parts.push(taskSection(context.taskAnalysis, result.observation));
   if (result.risk) parts.push(assessSection(result.risk));
   const iterations = iterationSections(result);
   if (iterations.length) {
@@ -208,4 +262,4 @@ function renderRun(result, context) {
   return parts.join('\n');
 }
 
-module.exports = { renderRun, DECISION_STYLE, TOOL_VERB, REASON_TEXT };
+module.exports = { renderRun, taskSection, DECISION_STYLE, TOOL_VERB, REASON_TEXT, NEED_TEXT };

@@ -1,8 +1,10 @@
 # Kakashi — Agentic Architecture
 
 > **Status:** Milestone 0 (discovery) + Milestone 1–3 (Guardian MVP, CLI, tests) delivered,
-> plus the detection-correctness follow-up described in §22.1.
-> Milestones 4–10 are specified here but **not implemented**.
+> plus the detection-correctness follow-up described in §22.1 and the `TaskAnalyzer`
+> (the first half of Milestone 4) described in §20.6.
+> Milestones 5–10, and Milestone 4's field-level semantics, are specified here but
+> **not implemented**.
 >
 > Companion to [ARCHITECTURE.md](ARCHITECTURE.md), which documents Kakashi v1.1 as it
 > exists. This document records what was found during repository discovery, what the
@@ -264,7 +266,8 @@ Populated from the repository, not assumed.
 | **Verification** | **MISSING** | — | Verifier | **implement** |
 | Human-in-the-loop | **MISSING** | — | Approval gate | **implement** |
 | Destination model | **MISSING** | — | GuardianContext | **implement** |
-| Task semantics | **MISSING** | — | TaskAnalyzer | **defer to M4** |
+| Task semantics (class level) | **MISSING** | — | TaskAnalyzer | **implemented — §20.6** |
+| Task semantics (field level) | **MISSING** | — | TaskAnalyzer | **defer to M4** |
 | `drop` / `generalize` / `pseudonymize` | **MISSING** | — | Field-level tools | **SHOULD NOT IMPLEMENT (MVP)** — see below |
 | LLM / semantic reasoning | **MISSING** | — | LocalModelTaskAnalyzer | **defer to M7** |
 | Agent-to-agent firewall | **MISSING** | — | Interaction model | **defer to M10** |
@@ -292,6 +295,7 @@ axis Kakashi actually has: the **sensitivity class**. Field-level transforms are
 src/guardian/classes.js    SENSITIVITY_CLASSES — pattern id → class; drift check
 src/guardian/goal.js       SecurityGoal
 src/guardian/context.js    GuardianContext (agent, task, resource, destination, policy)
+src/guardian/task.js       TaskAnalyzer — stated purpose → per-class requirement
 src/guardian/profiles.js   AgentProfile registry (trust, network capability)
 src/guardian/state.js      GuardianState + STATUS enum + transition log
 src/guardian/observe.js    Observer — wraps readFile + maskText + summarize; metadata only
@@ -305,6 +309,7 @@ src/guardian/audit.js      Safe audit events (JSONL)
 src/guardian/paths.js      Path validation (realpath, regular-file, containment)
 src/guardian/index.js      runGuardian() — the loop
 tests/guardian.test.js     Unit + integration tests
+tests/task.test.js         TaskAnalyzer unit, property and injection tests
 ```
 
 Reused unchanged: `engine/masker`, `engine/patterns`, `engine/formats/*`,
@@ -319,12 +324,14 @@ initialise state ─────────────────────
    ↓                                       │
 OBSERVE        formats.readFile + maskText + pdpl.summarize
    ↓                                       │
+UNDERSTAND     TaskAnalyzer → intent + per-class requirement
+   ↓           (absent/unrecognised purpose ⇒ baseline, and costs risk points)
 ASSESS         RiskEngine → score, level, reason codes
    ↓                                       │
    ├── immediate-block? ──────────────► BLOCK
    ↓                                       │
-PLAN           Planner: minimum-necessary set of class→tool actions,
-   ↓                    informed by previous rejections + verifications
+PLAN           Planner: minimum-necessary set of class→tool actions, informed by
+   ↓                    the purpose, previous rejections and verifications
 VALIDATE       PolicyGuard: authorise / reject / require-human
    ↓                                       │
    ├── requires human? ──────────────► REQUIRE_APPROVAL (unless pre-authorised)
@@ -400,6 +407,60 @@ Anything a semantic component produces is a **proposal**. It enters the loop ups
   new concept to configure. `tests/guardian.test.js` locks this: it fails if a runtime
   dependency is added, if the seven-agent installer registry changes, or if the loop
   ever requires a socket.
+
+---
+
+### 20.6 Delivered — the TaskAnalyzer (`guardian/task.js`)
+
+Until this shipped, `--task` was decoration: it was printed and written to the audit
+event, and nothing read it. The planner picked the least destructive transform for
+every class alike, found out it was wrong only when the verifier failed, and climbed
+the ladder one wasted iteration at a time.
+
+The analyzer turns the stated purpose into a requirement per sensitivity class:
+
+| Requirement | Meaning | Tool preference |
+| --- | --- | --- |
+| `REQUIRED_DISTINCT` | the task counts, joins or groups by this, so two different values must stay different | `tokenize` → `redact` → `synthesize` |
+| `REQUIRED_SHAPE` | the task needs the value to still look like the real thing | `synthesize` → `tokenize` → `redact` (the baseline) |
+| `NOT_REQUIRED` | the task never reads this class | `redact` → `tokenize` → `synthesize` |
+
+Six intents are recognised — `analytics`, `engineering`, `communication`, `narrative`,
+`migration`, `testing` — by keyword match over a fixed English + Arabic vocabulary. No
+model, no network, no new dependency, for the same reason the risk engine is a weights
+table (§20.4). An unrecognised purpose is *reported as unrecognised* and changes nothing.
+
+**Why this cannot be used as an attack.** The task string is supplied by the very agent
+the Guardian is protecting data from — it is the obvious channel for a prompt-injected
+agent to argue for its own access. So the analyzer is built so that the argument cannot
+be won:
+
+> A task can only ever move a class to an **equal or more destructive** transform than
+> the Guardian would have chosen knowing nothing at all.
+
+No intent can request plaintext; the strongest claim a purpose can make is "I need to
+tell values apart", which is answered with stable tokens, not with values. Every
+preference order is a permutation of the ladder that only moves *more* destructive tools
+earlier, so the property holds for any subset of policy-permitted tools, not just the
+full set. `task.js` exports `assertNonWeakening()` and the suite runs it as a property
+test across every intent × class × permitted-tool subset (504 combinations), plus an
+end-to-end test that fires injection-shaped task strings at a real run and asserts the
+released artifact is never less protected than the no-task baseline.
+
+Purpose also costs risk points in one direction only: `TASK_NOT_STATED` (+5) and
+`TASK_NOT_UNDERSTOOD` (+3). Stating a purpose never buys a discount, because a discount
+is exactly what a crafted string would go shopping for. The score is explanatory in any
+case — it gates no decision.
+
+**What it changes in practice.** On `tests/fixtures/guardian_employees.md` to an external
+model, a blind run needs two iterations (synthesize → fails verification → tokenize); the
+same run with `--task "calculate average salary by age group"` reaches the same safe
+artifact in one, and a `--task "debug the failing export job"` redacts the people
+outright, because debugging has no use for them.
+
+Still not implemented (the rest of Milestone 4): field-level semantics. The analyzer
+reasons about classes, not columns — it cannot say "keep `department`, drop `salary`".
+That needs the field-addressed engine described in §19.
 
 ---
 
@@ -494,15 +555,19 @@ silent masking failure into a visible one in the first place.
 
 ## 23. Not implemented
 
-Milestones 4–10 are specified in this document but not built: `TaskAnalyzer`
-(field-level semantics), UAE policy pack, local semantic model, policy memory,
-prompt-injection / exfiltration guard, agent-to-agent firewall. Also out of scope:
+Milestones 5–10 are specified in this document but not built: UAE policy pack,
+local semantic model, policy memory, prompt-injection / exfiltration guard,
+agent-to-agent firewall. Milestone 4 is half-built: the `TaskAnalyzer` ships
+(§20.6), its field-level semantics do not. Also out of scope:
 wiring the Guardian into `agent-guard`'s HTTP surface, and Guardian support for the
 `db-*` commands (the loop currently operates on files).
 
 Known limitations of what *was* built:
 
 - Reasoning is class-level, not field-level; `drop` and `generalize` do not exist (§19).
+  The `TaskAnalyzer` inherits that limit: it decides per class, never per column.
+- Intent recognition is keyword matching. A purpose phrased outside the vocabulary is
+  reported as unrecognised and falls back to the baseline — safe, but no help.
 - `fake` mode cycles a short `fakeValues` list, so two distinct people can synthesise to
   the same name. Fine for a prohibited class (which escalates past `synthesize` anyway),
   lossy for a restricted one.

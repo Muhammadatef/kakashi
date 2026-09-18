@@ -24,6 +24,13 @@ const WEIGHTS = {
   networkCapableAgent: 4,
   unrecognisedAgent: 5,
   credentialPresent: 12,
+  // Purpose limitation needs a purpose. Without one the Guardian has to assume
+  // the broadest possible use of the data, which is a real, if modest, risk --
+  // so it costs points rather than being silently free. These only ever ADD:
+  // stating a purpose never buys a discount, or a crafted task string would be
+  // a way to lower the score.
+  taskNotStated: 5,
+  taskNotUnderstood: 3,
   governmentIdPresent: 10,
   checksumVerifiedIdentifier: 5,
   volume: { 100: 6, 1000: 10 },
@@ -139,6 +146,16 @@ const RiskEngine = {
     if (context.networkAccess) {
       add(WEIGHTS.networkCapableAgent, 'NETWORK_CAPABLE_AGENT',
         'requesting agent can reach the network');
+    }
+
+    // --- Purpose -----------------------------------------------------------
+    const analysis = context.taskAnalysis;
+    if (analysis && !analysis.stated) {
+      add(WEIGHTS.taskNotStated, 'TASK_NOT_STATED',
+        'no purpose was declared, so no data can be ruled unnecessary');
+    } else if (analysis && !analysis.recognised) {
+      add(WEIGHTS.taskNotUnderstood, 'TASK_NOT_UNDERSTOOD',
+        'the declared purpose matched no known intent; no narrowing applied');
     }
 
     // --- Volume ------------------------------------------------------------

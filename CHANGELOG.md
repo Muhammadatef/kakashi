@@ -10,6 +10,28 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The Guardian understands the task it is given** (`guardian/task.js`). `--task` used
+  to be decoration — printed, logged, read by nothing. It is now a stage of the loop
+  between OBSERVE and ASSESS: a stated purpose becomes a requirement per data class
+  (values must stay *distinguishable*, must keep their *shape*, or are *not needed at
+  all*), and the planner starts from the transform that purpose needs instead of
+  discovering it by failing verification first. Six intents, English and Arabic, matched
+  deterministically against a fixed vocabulary — no model, no network, no new dependency.
+  An unrecognised purpose is reported as unrecognised and changes nothing.
+  - *On the employees fixture to an external model: a blind run needs two iterations, a
+    run that states "calculate average salary by age group" needs one — and
+    "debug the failing export job" redacts the people outright, because debugging has no
+    use for them.*
+  - **The task string comes from the agent Kakashi is protecting data from, so it can
+    only ever make protection stricter.** No intent can request plaintext; the strongest
+    claim a purpose can make is "I need to tell values apart", which is answered with
+    stable tokens. `assertNonWeakening()` is exported and run as a property test over
+    every intent × class × permitted-tool subset (504 combinations), alongside an
+    end-to-end test that fires injection-shaped task strings at a real run and asserts
+    the released artifact is never less protected than the no-task baseline.
+  - Not stating a purpose now costs risk points (`TASK_NOT_STATED` +5,
+    `TASK_NOT_UNDERSTOOD` +3) — purpose limitation needs a purpose. Stating one never
+    buys a discount, which is exactly what a crafted string would go shopping for.
 - **Kakashi Guardian** (`kakashi guard <file>`) — an autonomous protection loop over the
   existing engine. Where `mask` applies a fixed pipeline once, `guard` holds a goal,
   observes the resource, assesses contextual risk (agent, destination, data class),
@@ -23,8 +45,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a new pattern cannot ship unclassified.
 - Value-free decision audit events (`~/.kakashi/guardian-audit.jsonl`), asserted by test
   to contain no raw secrets.
-- 41 new Guardian tests, plus 128 new detection- and coverage-correctness assertions
-  (279 total, all passing), including a new `tests/formats.test.js`.
+- 41 new Guardian tests and 17 TaskAnalyzer tests, plus 128 new detection- and
+  coverage-correctness assertions (340 total, all passing), including new
+  `tests/formats.test.js` and `tests/task.test.js`.
 
 ### Notes
 
