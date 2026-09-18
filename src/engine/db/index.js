@@ -17,6 +17,7 @@
  */
 
 const { maskText } = require('../masker');
+const { sqlWithLimit } = require('./limit');
 
 const DRIVERS = {
   postgres:   () => require('./postgres'),
@@ -104,14 +105,27 @@ async function* streamMasked(conn, query, options = {}) {
   const driver = loadDriver(driverId);
   const { maskOpts = {}, limit = 10000 } = options;
 
+  // Token state is shared across EVERY row of this result set. maskText()
+  // defaults these to fresh objects per call, which for a row-by-row stream
+  // would restart numbering at `_1` on each row -- so five distinct customers
+  // all masked to [FULL_NAME_1] and `--mode fake` gave every row the same
+  // synthetic person. Threading one map through the whole stream keeps tokens
+  // stable (same value -> same token) and distinct (different value ->
+  // different token), which is what makes masked rows still analysable.
+  const valueMap = {};
+  const counters = {};
+
   let count = 0;
-  for await (const row of driver.query(conn, query, options)) {
+  // `limit` is passed to the driver so it can cap the query at the SERVER (see
+  // ./limit.js), and re-checked here as a second line of defence for drivers
+  // that cannot push it down.
+  for await (const row of driver.query(conn, query, { ...options, limit })) {
     if (count >= limit) break;
     count++;
     // Serialise the row so text-based patterns can match values regardless
     // of the DB's typed representation (e.g. UUID, Date, numeric).
     const serialised = JSON.stringify(row, null, 2);
-    const { masked, findings } = maskText(serialised, maskOpts);
+    const { masked, findings } = maskText(serialised, { ...maskOpts, valueMap, counters });
     let maskedRow;
     try {
       maskedRow = JSON.parse(masked);

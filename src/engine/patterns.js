@@ -16,6 +16,158 @@ const NAME_STOPLIST = new Set([
 ]);
 
 // ---------------------------------------------------------------------------
+// Precision gating for the two name patterns.
+//
+// `full_name` matches any run of capitalised words and `non_latin_name` any run
+// of Arabic words. Both are necessarily broad -- a name is just words -- and on
+// ordinary prose that broadness dominates: scanning Kakashi's own source used to
+// report 36 "full names" (`Core Rule`, `Total Findings`, `Database Connection`)
+// and 48 "Arabic names", where the Arabic hits were the report vocabulary
+// itself (`تقرير امتثال` is "compliance report"). For a tool whose Guardian has
+// an explicit `preserveTaskUtility` goal, masking a heading is not harmless: it
+// destroys the context the requesting agent needs.
+//
+// The gate is deliberately asymmetric, because the two errors are not
+// comparable. Missing a real name is a disclosure; masking a heading is an
+// annoyance. So a match is rejected ONLY when EVERY token is an ordinary word
+// of the language. One unrecognised token -- which is what a real name almost
+// always contributes -- is enough to keep the match. `Ahmed Hassan`, `محمد
+// أحمد` and even `Contact Ahmed Hassan` all survive; `Core Rule` and `تقرير
+// امتثال` do not.
+//
+// A name built entirely from ordinary words (`Mark Price`, `اسم الله`) would
+// still be dropped by that rule alone, so an explicit cue immediately before
+// the match -- a title, or a labelled field -- overrides it and forces the
+// match to be kept.
+// ---------------------------------------------------------------------------
+
+/** Ordinary English words that appear capitalised in headings, labels and docs. */
+const COMMON_EN = new Set([
+  ...NAME_STOPLIST,
+  // Document and report vocabulary
+  'core', 'rule', 'rules', 'summary', 'overview', 'introduction', 'section',
+  'chapter', 'appendix', 'figure', 'note', 'notes', 'warning', 'caution',
+  'example', 'examples', 'reference', 'references', 'index', 'contents',
+  'title', 'subtitle', 'header', 'footer', 'page', 'pages', 'version',
+  'draft', 'final', 'review', 'approved', 'rejected', 'pending', 'complete',
+  'findings', 'finding', 'result', 'results', 'summary', 'details', 'detail',
+  'description', 'purpose', 'scope', 'background', 'method', 'methods',
+  'conclusion', 'recommendation', 'recommendations', 'action', 'actions',
+  // Technical vocabulary
+  'database', 'connection', 'server', 'client', 'service', 'services',
+  'request', 'response', 'error', 'errors', 'warning', 'debug', 'info',
+  'config', 'configuration', 'setting', 'settings', 'option', 'options',
+  'default', 'custom', 'user', 'users', 'admin', 'account', 'accounts',
+  'file', 'files', 'folder', 'directory', 'path', 'paths', 'output', 'input',
+  'source', 'target', 'format', 'formats', 'pattern', 'patterns', 'match',
+  'key', 'keys', 'token', 'tokens', 'secret', 'secrets', 'password',
+  'credential', 'credentials', 'access', 'permission', 'permissions',
+  'security', 'privacy', 'policy', 'policies', 'compliance', 'audit',
+  'scan', 'mask', 'masked', 'redact', 'redacted', 'protected', 'personal',
+  'sensitive', 'private', 'public', 'local', 'remote', 'external', 'internal',
+  'test', 'tests', 'testing', 'sample', 'demo', 'mock', 'fixture',
+  'install', 'setup', 'usage', 'command', 'commands', 'flag', 'flags',
+  'category', 'categories', 'severity', 'level', 'levels', 'priority',
+  // Business vocabulary
+  'company', 'business', 'customer', 'customers', 'client', 'clients',
+  'employee', 'employees', 'staff', 'department', 'team', 'manager',
+  'contact', 'address', 'phone', 'email', 'mobile', 'office', 'branch',
+  'invoice', 'payment', 'amount', 'balance', 'currency', 'price', 'cost',
+  'quarter', 'quarterly', 'annual', 'monthly', 'weekly', 'daily',
+  'project', 'projects', 'product', 'products', 'platform', 'system',
+  // Calendar words that are capitalised in prose
+  'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+  'september', 'october', 'november', 'december',
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+  // Data-protection vocabulary. This is the register Kakashi's own documents,
+  // reports and policy names are written in, so without these every heading in
+  // a compliance document reads as a person ("Data Protection Officer").
+  'protection', 'processing', 'processor', 'controller', 'subject', 'subjects',
+  'breach', 'breaches', 'consent', 'lawful', 'basis', 'rights', 'obligations',
+  'notification', 'reporting', 'transfer', 'cross', 'border', 'retention',
+  'definitions', 'conditions', 'requirements', 'guidance', 'standard',
+  'standards', 'regulation', 'regulations', 'law', 'laws', 'article',
+  'articles', 'decree', 'federal', 'clause', 'terms', 'agreement',
+  'officer', 'authority', 'governance', 'framework', 'control', 'controls',
+  'risk', 'risks', 'assessment', 'impact', 'measure', 'measures',
+  'identifier', 'identifiers', 'record', 'records', 'entry', 'entries',
+  'guardian', 'engine', 'module', 'library', 'package', 'release', 'changelog',
+  'ordinary', 'english', 'arabic', 'visa', 'passport', 'licence', 'license',
+  'national', 'unified', 'bank', 'card', 'credit', 'number', 'numbers',
+]);
+
+/**
+ * Ordinary Arabic words: function words plus the report/compliance vocabulary
+ * this tool's own output is written in.
+ */
+const COMMON_AR = new Set([
+  // Function words and particles
+  'من', 'في', 'على', 'إلى', 'الى', 'عن', 'مع', 'هذا', 'هذه', 'ذلك', 'تلك',
+  'التي', 'الذي', 'الذين', 'كل', 'بعض', 'غير', 'قد', 'لا', 'ما', 'أو', 'او',
+  'ثم', 'لكن', 'أن', 'ان', 'إن', 'كان', 'كانت', 'يكون', 'تكون', 'تم', 'يتم',
+  'بعد', 'قبل', 'عند', 'حيث', 'أيضا', 'ايضا', 'فقط', 'جميع', 'بين', 'حتى',
+  'لم', 'لن', 'هو', 'هي', 'هم', 'نحن', 'أنت', 'انت', 'كما', 'مثل', 'دون',
+  // Report and compliance vocabulary
+  'تقرير', 'التقرير', 'امتثال', 'الامتثال', 'بيانات', 'البيانات', 'شخصية',
+  'الشخصية', 'حماية', 'الحماية', 'قانون', 'القانون', 'مادة', 'المادة',
+  'المواد', 'فحص', 'الفحص', 'ملف', 'الملف', 'ملفات', 'الملفات', 'نتيجة',
+  'نتائج', 'النتائج', 'إجمالي', 'اجمالي', 'حسب', 'فئة', 'الفئة', 'خطورة',
+  'الخطورة', 'ملخص', 'الملخص', 'عنوان', 'العنوان', 'سطر', 'السطر', 'نوع',
+  'النوع', 'عدد', 'العدد', 'مسار', 'المسار', 'وقت', 'الوقت', 'مدة', 'المدة',
+  'أعلى', 'اعلى', 'تعريفات', 'شروط', 'معالجة', 'أمن', 'امن', 'الإبلاغ',
+  'الابلاغ', 'انتهاك', 'نقل', 'عبر', 'الحدود', 'تعريف', 'المستشهد',
+  // Kakashi's own Arabic labels
+  'الهوية', 'الإماراتية', 'الاماراتية', 'هاتف', 'إماراتي', 'اماراتي', 'جواز',
+  'سفر', 'رقم', 'الرقم', 'التأشيرة', 'رخصة', 'تجارية', 'صندوق', 'بريد',
+  'اسم', 'الاسم', 'عربي', 'الموحد', 'ايبان', 'إلكتروني', 'الكتروني',
+  'بطاقة', 'ائتمان', 'الضمان', 'الاجتماعي', 'تاريخ', 'الميلاد', 'العمر',
+  'الكامل', 'رمز', 'مفتاح', 'اتصال', 'قاعدة', 'سر', 'بيئي', 'خاص', 'وثائق',
+  'شخصي', 'اعتمادات', 'جاري', 'للتطبيق', 'تُعرض', 'القيم', 'راجع', 'للتفاصيل',
+]);
+
+/**
+ * An explicit cue that whatever follows is a person's name. When one of these
+ * sits immediately before a match, the "all ordinary words" rejection is
+ * overridden -- this is what keeps `Name: Mark Price` from being discarded.
+ */
+const NAME_CUE_RX = new RegExp(
+  '(?:'
+  + 'name|full[ \\t]*name|customer|client|employee|staff|contact|owner|'
+  + 'applicant|holder|beneficiary|patient|passenger|guest|member|author|'
+  + 'signed[ \\t]*by|prepared[ \\t]*by|reviewed[ \\t]*by|approved[ \\t]*by|'
+  + 'attn|mr|mrs|ms|miss|dr|prof|eng|sheikh|'
+  + 'الاسم|اسم|السيد|السيدة|الآنسة|الدكتور|المهندس|الشيخ|العميل|الموظف'
+  + ')[:\\s]*$',
+  'i',
+);
+
+/** Arabic particles that are strong positive evidence of a personal name. */
+const AR_NAME_PARTICLES = new Set(['بن', 'بنت', 'ابن', 'آل', 'ال', 'عبد', 'أبو', 'ابو', 'أم', 'ام']);
+
+/**
+ * Shared gate for both name patterns.
+ * @param {string[]} tokens - the match split into words
+ * @param {Set<string>} common - ordinary words of that language
+ * @param {string} text - the full document
+ * @param {number} idx - offset of the match
+ */
+function looksLikeName(tokens, common, text, idx) {
+  // An explicit cue immediately before the match settles it, and outranks
+  // everything below -- `Name: Mark Price` is a name however ordinary the words.
+  const before = text.slice(Math.max(0, idx - 24), idx);
+  if (NAME_CUE_RX.test(before)) return true;
+
+  // Structural signal: a Markdown heading is a section title, not a person.
+  // Checked against the line so far rather than the whole document.
+  const lineStart = text.lastIndexOf('\n', idx - 1) + 1;
+  const linePrefix = text.slice(lineStart, idx);
+  if (/^\s{0,3}#{1,6}\s[^\n]*$/.test(linePrefix)) return false;
+
+  // Otherwise: keep the match unless every token is an ordinary word.
+  return !tokens.every((w) => common.has(w.toLowerCase()));
+}
+
+// ---------------------------------------------------------------------------
 // Checksum helpers
 //
 // These are exported as reusable primitives. They are NOT wired into the
@@ -119,7 +271,7 @@ const BASE_PATTERNS = [
     cat: 'id',
     // Matches UAE mobile (+971 5x…) and UAE landline (+971 2/3/4/6/7/9) in
     // international, national-with-country-code (00971), or local (0X) forms.
-    rx: /(?:\+971|00971|971)[\s.-]?(?:5[0-9]|2|3|4|6|7|9)[\s.-]?\d{3}[\s.-]?\d{4}\b|\b0(?:5[0-9]|2|3|4|6|7|9)[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
+    rx: /(?:\+971|00971|971)[ \t.-]?(?:5[0-9]|2|3|4|6|7|9)[ \t.-]?\d{3}[ \t.-]?\d{4}\b|\b0(?:5[0-9]|2|3|4|6|7|9)[ \t.-]?\d{3}[ \t.-]?\d{4}\b/g,
     fakeValues: ['+971501234567', '0501234567'],
   },
   {
@@ -155,7 +307,7 @@ const BASE_PATTERNS = [
     label: 'P.O. Box',
     labelAr: 'صندوق بريد',
     cat: 'id',
-    rx: /\bP\.?\s*O\.?\s*Box\s+\d{1,6}\b/gi,
+    rx: /\bP\.?[ \t]*O\.?[ \t]*Box[ \t]+\d{1,6}\b/gi,
     fakeValues: ['P.O. Box 12345'],
   },
   {
@@ -165,7 +317,17 @@ const BASE_PATTERNS = [
     cat: 'id',
     // Two or more whitespace-separated Arabic-script tokens.
     // v1.2: extend to Cyrillic, Hebrew, CJK, Devanagari.
-    rx: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+(?:\s+[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+)+/g,
+    //
+    // Without the gate below, every run of two Arabic words was a "name", so
+    // ordinary Arabic prose -- including this tool's own report headings -- was
+    // masked. A nasab particle (بن, آل, عبد, أبو) is decisive evidence of a
+    // person and short-circuits the check.
+    rx: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+(?:[ \t]+[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+)+/g,
+    validate: (match, text, idx) => {
+      const tokens = match.split(/\s+/);
+      if (tokens.some((w) => AR_NAME_PARTICLES.has(w))) return true;
+      return looksLikeName(tokens, COMMON_AR, text, idx);
+    },
     fakeValues: ['محمد أحمد', 'فاطمة علي'],
   },
   {
@@ -184,7 +346,7 @@ const BASE_PATTERNS = [
     cat: 'id',
     // UAE IBAN: AE + 2 check digits + 3-digit bank + 16-digit account = 23 chars.
     // Format tolerates optional spaces every 4 chars (bank-statement style).
-    rx: /\bAE\d{2}(?:\s?\d{4}){4}\s?\d{3}\b|\bAE\d{21}\b/g,
+    rx: /\bAE\d{2}(?:[ \t]?\d{4}){4}[ \t]?\d{3}\b|\bAE\d{21}\b/g,
     fakeValues: ['AE070331234567890123456'],
     // Strict-mode reporters may additionally call isValidIban(match).
   },
@@ -207,7 +369,7 @@ const BASE_PATTERNS = [
     //   intl:   +1-415-555-0188   +44 20 7946 0521   +91-22-2493-1234
     //   parens: (415) 555-0188
     //   us:     415-555-0188      415.555.0188       415 555 0188
-    rx: /(?:\+\d{1,3}[\s.-]\d{1,4}[\s.-]\d{2,4}[\s.-]\d{3,4}|\(\d{2,4}\)\s*\d{3}[\s.-]\d{4}|\b\d{3}[\s.-]\d{3}[\s.-]\d{4})\b/g,
+    rx: /(?:\+\d{1,3}[ \t.-]\d{1,4}[ \t.-]\d{2,4}[ \t.-]\d{3,4}|\(\d{2,4}\)[ \t]*\d{3}[ \t.-]\d{4}|\b\d{3}[ \t.-]\d{3}[ \t.-]\d{4})\b/g,
     validate: (match, text, idx) => {
       const digits = match.replace(/\D/g, '');
       if (digits.length < 9 || digits.length > 15) return false;
@@ -235,7 +397,7 @@ const BASE_PATTERNS = [
     labelAr: 'بطاقة ائتمان',
     cat: 'pii',
     // Visa/MC/Discover (4-4-4-4) | Amex (4-6-5) | continuous 13-19 digits
-    rx: /\b(?:\d{4}[\s-]?){3}\d{4}\b|\b\d{4}[\s-]\d{6}[\s-]\d{5}\b|\b\d{13,19}\b/g,
+    rx: /\b(?:\d{4}[ \t-]?){3}\d{4}\b|\b\d{4}[ \t-]\d{6}[ \t-]\d{5}\b|\b\d{13,19}\b/g,
     validate: (match) => {
       const digits = match.replace(/\D/g, '');
       return digits.length >= 13 && digits.length <= 19;
@@ -255,7 +417,7 @@ const BASE_PATTERNS = [
     label: 'Date of Birth',
     labelAr: 'تاريخ الميلاد',
     cat: 'pii',
-    rx: /(?:date\s*of\s*birth|dob|birth\s*date|born\s*on)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/gi,
+    rx: /(?:date[ \t]*of[ \t]*birth|dob|birth[ \t]*date|born[ \t]*on)[: \t]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/gi,
     fakeValues: ['01/01/1990'],
   },
   {
@@ -271,7 +433,7 @@ const BASE_PATTERNS = [
     label: 'Age',
     labelAr: 'العمر',
     cat: 'pii',
-    rx: /\b(?:age|aged)[:\s]+\d{1,3}\b/gi,
+    rx: /\b(?:age|aged)[: \t]+\d{1,3}\b/gi,
     fakeValues: ['age: 34'],
   },
   {
@@ -279,11 +441,11 @@ const BASE_PATTERNS = [
     label: 'Full Name',
     labelAr: 'الاسم الكامل',
     cat: 'pii',
-    rx: /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g,
-    validate: (match) => {
-      const words = match.split(/\s+/);
-      return words.every((w) => !NAME_STOPLIST.has(w.toLowerCase()));
-    },
+    rx: /\b[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)+\b/g,
+    // Keep unless every token is an ordinary English word; an explicit name cue
+    // before the match overrides that. See looksLikeName() for why the rule is
+    // asymmetric.
+    validate: (match, text, idx) => looksLikeName(match.split(/\s+/), COMMON_EN, text, idx),
     fakeValues: ['John Smith', 'Jane Doe'],
   },
   // ---- Credentials ---------------------------------------------------------
@@ -328,7 +490,7 @@ const BASE_PATTERNS = [
     labelAr: 'مفتاح Anthropic',
     cat: 'cred',
     rx: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
-    fakeValues: ['sk-ant-api03-abc123def456'],
+    fakeValues: ['sk-ant-api03-abc123def456ghi789jkl012mno'],
   },
   {
     id: 'hf_token',
@@ -336,7 +498,7 @@ const BASE_PATTERNS = [
     labelAr: 'رمز HuggingFace',
     cat: 'cred',
     rx: /\bhf_[A-Za-z0-9]{20,}\b/g,
-    fakeValues: ['hf_abc123def456ghi789'],
+    fakeValues: ['hf_abc123def456ghi789jkl012mno345'],
   },
   {
     id: 'gh_token',
@@ -360,15 +522,23 @@ const BASE_PATTERNS = [
     labelAr: 'مفتاح Stripe',
     cat: 'cred',
     rx: /\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{20,}\b/g,
-    fakeValues: ['sk_live_abc123def456ghi789'],
+    // Deliberately `sk_test_`, not `sk_live_`, and self-describing.
+    //
+    // fakeValues are what `--mode fake` writes into a masked file, so they end
+    // up in files people commit. A `sk_live_`-shaped placeholder is treated as
+    // a real credential by GitHub push protection and every other secret
+    // scanner, which means the masked output -- the thing Kakashi produced to
+    // make the file safe to share -- would itself block the user's push. It
+    // also blocked this repository's own.
+    fakeValues: ['sk_test_EXAMPLEplaceholderNOTAREALKEY'],
   },
   {
     id: 'bearer',
     label: 'Bearer Token',
     labelAr: 'رمز Bearer',
     cat: 'cred',
-    rx: /\bBearer\s+[A-Za-z0-9._\-+/=]{20,}\b/gi,
-    fakeValues: ['Bearer abc123def456ghi789'],
+    rx: /\bBearer[ \t]+[A-Za-z0-9._\-+/=]{20,}\b/gi,
+    fakeValues: ['Bearer abc123def456ghi789jkl012mno345'],
   },
   {
     id: 'db_conn',
@@ -431,8 +601,35 @@ const BASE_PATTERNS = [
     // covering shell .env (`KEY=value`) and source-code styles
     // (`KEY = "value"`, `KEY: 'value'`). Lookbehind avoids consuming the
     // leading newline that previously collapsed adjacent lines.
-    rx: /(?<=^|[\s,;({\[])([A-Za-z_][\w.-]*(?:PASSWORD|PASSWD|PWD|SECRET|TOKEN|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?KEY|SECRET[_-]?KEY|CREDENTIAL|HOST|BUCKET|SIGNATURE|HMAC|DSN|WEBHOOK)[\w.-]*)\s*[:=]\s*(?:"([^"\n]+)"|'([^'\n]+)'|([^\s\n#,;)\]}]+))/gim,
-    fakeValues: ['API_KEY=sk-fake123'],
+    // The prefix before the keyword is OPTIONAL. It used to be mandatory
+    // (`[A-Za-z_][\w.-]*` with no `?`), which meant the most common forms in a
+    // real .env file were silently missed — `PASSWORD=`, `API_KEY=`, `TOKEN=`,
+    // `SECRET=` all failed while `DB_PASSWORD=` matched. The pattern's own
+    // fakeValue (`API_KEY=sk-fake123`) was itself undetectable.
+    rx: /(?<=^|[\s,;({\[])((?:[A-Za-z_][\w.-]*)?(?:PASSWORD|PASSWD|PWD|SECRET|TOKEN|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?KEY|SECRET[_-]?KEY|CREDENTIAL|HOST|BUCKET|SIGNATURE|HMAC|DSN|WEBHOOK)[\w.-]*)[ \t]*[:=][ \t]*(?:"([^"\n]+)"|'([^'\n]+)'|([^\s\n#,;)\]}]+))/gim,
+    // Keys that contain a trigger word but never hold a secret. Kept short and
+    // specific on purpose: for a DLP tool, over-masking a benign value is a
+    // nuisance while missing a real `TOKEN=` is a breach, so the default leans
+    // toward detection and this list stays an explicit, auditable exception.
+    validate: (match) => {
+      const key = match.split(/[:=]/)[0].trim();
+      if (/^(?:[\w.-]*_)?TOKENIZ(?:E|ER|ERS|ATION)$/i.test(key)) return false;
+      // Never re-detect a token this masker already emitted. Now that only the
+      // VALUE is replaced, `API_KEY=[OPENAI_KEY_1]` still looks like KEY=value
+      // -- so without this, masking stopped being idempotent and the Guardian's
+      // verifier could never converge (it re-scans its own output and would
+      // escalate forever, ending in BLOCK).
+      const value = match.slice(match.search(/[:=]/) + 1).trim().replace(/^["']|["']$/g, '');
+      return !/^\[[A-Z0-9_]*\]?$/.test(value);
+    },
+    // Replace the VALUE only (group 2 double-quoted, 3 single-quoted, 4 bare),
+    // never the whole `KEY=value`. Masking the key name too turned
+    // `OPENAI_API_KEY=sk-...` into a bare `[ENV_SECRET_1]`, which destroys the
+    // one piece of context an agent needs to reason about the file -- and it
+    // shadowed the specific credential patterns, so the `[OPENAI_KEY_1]` token
+    // this project's own README advertises could never actually appear.
+    // Narrowing the span also lets a more specific pattern win the overlap.
+    valueGroups: [2, 3, 4],
   },
   {
     id: 'hex_secret',
@@ -458,6 +655,13 @@ module.exports = {
   PII_PATTERNS,
   CRED_PATTERNS,
   NAME_STOPLIST,
+  // Precision gating for the name patterns — exported so tests and future
+  // tuning can reach them without re-deriving the lists.
+  COMMON_EN,
+  COMMON_AR,
+  AR_NAME_PARTICLES,
+  NAME_CUE_RX,
+  looksLikeName,
   // Checksum helpers — used by the reporter (A2) and PDPL mapping (A5) to
   // badge findings as "checksum-verified" without breaking pattern lenience.
   luhnCheck,

@@ -1,3 +1,5 @@
+const { sqlWithLimit } = require('./limit');
+
 /**
  * PostgreSQL driver adapter.
  *
@@ -7,7 +9,7 @@
  * Connection string: postgres://user:pass@host:port/db
  */
 
-async function* query(conn, sql) {
+async function* query(conn, sql, options = {}) {
   let Client;
   try {
     ({ Client } = require('pg'));
@@ -18,7 +20,10 @@ async function* query(conn, sql) {
   const client = new Client({ connectionString: conn });
   await client.connect();
   try {
-    const result = await client.query(sql);
+    // client.query() resolves with the COMPLETE row set, so the cap has to be
+    // in the statement -- capping afterwards would already have bought the
+    // whole table into memory.
+    const result = await client.query(sqlWithLimit(sql, options.limit));
     for (const row of result.rows) {
       yield row;
     }

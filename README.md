@@ -60,7 +60,7 @@ postgresql://admin:Pr0d_P@55word!@10.128.3.4:5432/customers
 sk-proj-aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789
 ghp_abc123def456ghi789jkl012mno345pqr678
 admin@example.com
-+1-555-0100
++1-415-555-0188
 4111-1111-1111-1111
 ```
 
@@ -198,7 +198,7 @@ Kakashi
    [PII] Personal Info (3 found)
    ─────────────────────────────────────────────────
    Line 14   [EMAIL]           alex.taylor@example.com
-   Line 35   [PHONE]           +1-555-0100
+   Line 35   [PHONE]           +1-415-555-0188
    Line 67   [FULL_NAME]       Alex Taylor
 
    Total: 6 findings  |  Run `kakashi mask <file>` to apply
@@ -345,7 +345,7 @@ Hex Secret         a1b2c3d4e5f6... (40+)  →  [HEX_SECRET_1]
 
 ```
 Email              user@example.com       →  [EMAIL_1]
-Phone              +1-555-0100            →  [PHONE_1]
+Phone              +1-415-555-0188            →  [PHONE_1]
 IP Address         10.128.3.4             →  [IP_1]
 Credit Card        4111 1111 1111 1111    →  [CC_1]
 National ID        123-45-6789            →  [SSN_1]
@@ -432,7 +432,7 @@ $ codex "fix the auth bug in src/middleware/auth.py"
 - National ID: 123-45-6789
 - Full Name: Alex Taylor
 - Email: alex.taylor@example.com
-- Phone: +1-555-0100
+- Phone: +1-415-555-0188
 + National ID: [SSN_1]
 + Full Name: [FULL_NAME_1]
 + Email: [EMAIL_1]
@@ -442,10 +442,10 @@ $ codex "fix the auth bug in src/middleware/auth.py"
 ### Python file
 
 ```diff
-- DB_PASS = "Pr0d_P@55w0rd!"
+- DB_PASSWORD = "Pr0d_P@55w0rd!"
 - API_KEY = "sk-proj-xK9mN2pQrStUvWxYz"
 - ADMIN_EMAIL = "admin@example.com"
-+ DB_PASS = "[ENV_SECRET_1]"
++ DB_PASSWORD = "[ENV_SECRET_1]"
 + API_KEY = "[OPENAI_KEY_1]"
 + ADMIN_EMAIL = "[EMAIL_1]"
 ```
@@ -477,12 +477,30 @@ review a schema without leaking credentials or customer records.
 ## Commands
 
 ```
-kakashi scan   <file>          Scan and report — nothing written
-kakashi mask   <file>          Mask and reconstruct original format
-kakashi audit  <file>          Full original → replacement map
-kakashi mask-dir <dir> -r      Mask all supported files recursively
-kakashi stats                  Cumulative session stats
-kakashi list-patterns          All active detection patterns
+Files
+  kakashi scan   <file>        Scan and report — nothing written
+  kakashi mask   <file>        Mask and reconstruct original format
+  kakashi audit  <file>        Full original → replacement map
+  kakashi mask-dir <dir> -r    Mask all supported files recursively
+
+Directories & databases
+  kakashi scan-dir <dir>       Recursive scan → PDPL-mapped compliance report
+  kakashi db-scan  <conn>      Scan query results — counts only, nothing written
+  kakashi db-mask  <conn>      Query, mask rows locally, write a safe copy
+  kakashi db-audit <conn>      Full original → token map for query results
+
+Agentic
+  kakashi guard  <file>        Autonomously protect a file for a given agent,
+                               task and destination — observe → understand task
+                               → assess → plan → act → verify → replan. Returns
+                               a decision: ALLOW / ALLOW_WITH_TRANSFORMATION /
+                               REQUIRE_APPROVAL / BLOCK
+  kakashi agent-guard          Run as a local privacy daemon any agent can consult
+
+Info
+  kakashi stats                Cumulative session stats
+  kakashi impact               Privacy-preserving impact snapshot
+  kakashi list-patterns        All active detection patterns
 
 Flags:
   --mode typed|redact|fake     Replacement style (default: typed)
@@ -490,6 +508,9 @@ Flags:
   --output path/to/masked/     Output path
   --overwrite                  Replace original (asks confirmation)
   --stdin                      Read from stdin, write to stdout
+  --task "<purpose>"           `guard` only: what the file is needed for. Narrows
+                               protection to that purpose — it can only make the
+                               result stricter, never weaker
   -v, --verbose                Show per-finding previews on `scan`
                                (NOT agent-safe — default is counts-only)
 

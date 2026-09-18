@@ -1,3 +1,5 @@
+const { sqlWithLimit } = require('./limit');
+
 /**
  * Databricks SQL Warehouse driver adapter.
  *
@@ -10,7 +12,7 @@
  *   databricks://dapi1234@myworkspace.cloud.databricks.com/sql/1.0/warehouses/xxxx
  */
 
-async function* query(conn, sql) {
+async function* query(conn, sql, options = {}) {
   let DBSQLClient;
   try {
     ({ DBSQLClient } = require('@databricks/sql'));
@@ -28,7 +30,7 @@ async function* query(conn, sql) {
 
   const session = await client.openSession();
   try {
-    const op = await session.executeStatement(sql, { runAsync: true });
+    const op = await session.executeStatement(sqlWithLimit(sql, options.limit), { runAsync: true });
     const rows = await op.fetchAll();
     await op.close();
     for (const row of rows) {

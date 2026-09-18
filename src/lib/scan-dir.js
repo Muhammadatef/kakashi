@@ -83,21 +83,38 @@ async function scanDirectory(rootPath, options = {}) {
   }
 
   const started = Date.now();
-  const exts = formats.SUPPORTED_EXTS;
-  const pattern = `**/*.{${exts.join(',')}}`;
+  const pattern = formats.globPatterns(true);
 
-  const ignore = [
+  const baseIgnore = [
     '**/node_modules/**',
     '**/masked_*',
     '**/.git/**',
     ...extraIgnore,
   ];
-  if (respectGitignore) {
-    ignore.push(...readIgnoreFile(path.join(rootPath, '.gitignore')));
-    ignore.push(...readIgnoreFile(path.join(rootPath, '.kakashiignore')));
-  }
+  const ignoreFileRules = respectGitignore
+    ? [
+      ...readIgnoreFile(path.join(rootPath, '.gitignore')),
+      ...readIgnoreFile(path.join(rootPath, '.kakashiignore')),
+    ]
+    : [];
+  const ignore = [...baseIgnore, ...ignoreFileRules];
 
-  const allFiles = await glob(pattern, { cwd: rootPath, absolute: true, ignore, nodir: true });
+  // dot: true -- hidden files are where credentials live (`.env`, `.env.local`).
+  // Without it a compliance report can read "0 credentials" while a production
+  // connection string sits in config/.env.
+  const globOpts = { cwd: rootPath, absolute: true, nodir: true, dot: true, nocase: true };
+  const allFiles = await glob(pattern, { ...globOpts, ignore });
+
+  // Honouring .gitignore is deliberate, but it is silent, and `.env` is in
+  // almost every .gitignore -- exactly the file most likely to hold a live
+  // credential. Left unsaid, a report reading "0 credentials" is indistinguishable
+  // from one that simply never looked. So count what the ignore FILES excluded
+  // (not the always-on node_modules/.git rules) and let the caller surface it.
+  let skippedByIgnoreFile = 0;
+  if (ignoreFileRules.length > 0) {
+    const withoutIgnoreFiles = await glob(pattern, { ...globOpts, ignore: baseIgnore });
+    skippedByIgnoreFile = withoutIgnoreFiles.length - allFiles.length;
+  }
 
   const fileResults = [];
   let processed = 0;
@@ -144,6 +161,7 @@ async function scanDirectory(rootPath, options = {}) {
     durationMs: Date.now() - started,
     files: enrichedFiles,
     summary,
+    skippedByIgnoreFile,
   };
 }
 

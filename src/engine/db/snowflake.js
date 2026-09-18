@@ -1,3 +1,5 @@
+const { sqlWithLimit } = require('./limit');
+
 /**
  * Snowflake driver adapter.
  *
@@ -8,7 +10,7 @@
  *   snowflake://user:pass@account.region.snowflakecomputing.com/db/schema?warehouse=WH
  */
 
-async function* query(conn, sql) {
+async function* query(conn, sql, options = {}) {
   let snowflake;
   try {
     snowflake = require('snowflake-sdk');
@@ -33,7 +35,7 @@ async function* query(conn, sql) {
 
   const rows = await new Promise((resolve, reject) => {
     connection.execute({
-      sqlText: sql,
+      sqlText: sqlWithLimit(sql, options.limit),
       complete: (err, stmt, result) => (err ? reject(err) : resolve(result)),
     });
   });
