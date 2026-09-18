@@ -6,7 +6,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [1.2.0] — 2026-09-18
+
+The **Guardian release**. Kakashi stops being a masker you invoke and becomes a
+protection loop that holds a goal, understands what the data is wanted for, acts,
+checks its own work and changes its mind when it was wrong.
 
 ### Added
 

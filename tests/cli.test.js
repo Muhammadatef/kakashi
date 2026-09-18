@@ -143,6 +143,24 @@ function runCliTests() {
   // The only way through was to pass a placeholder path that --stdin then
   // ignored. The argument is now optional, and required only without --stdin.
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // `kakashi --version` was a string literal in bin/kakashi.js, so it kept
+  // reporting 1.1.0 after package.json moved to 1.2.0 -- a user checking which
+  // version they were running would have been told the wrong one.
+  // ---------------------------------------------------------------------------
+  check('the reported version matches package.json and the lockfile', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+    const lock = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package-lock.json'), 'utf8'));
+
+    const reported = runCli(['--version']).stdout.trim();
+    if (reported !== pkg.version) {
+      throw new Error(`CLI reports ${reported}, package.json says ${pkg.version}`);
+    }
+    if (lock.version !== pkg.version || lock.packages[''].version !== pkg.version) {
+      throw new Error(`lockfile says ${lock.version}/${lock.packages[''].version}, package.json says ${pkg.version}`);
+    }
+  });
+
   check('mask --stdin works with no file argument', () => {
     const r = shell(`printf 'a@b.com\n' | node ${CLI} mask --stdin`);
     if (r.status !== 0) throw new Error(`expected exit 0, got ${r.status}: ${r.stderr}`);

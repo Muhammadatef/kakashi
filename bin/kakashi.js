@@ -158,7 +158,9 @@ function confirmOverwrite(filePath) {
 program
   .name('kakashi')
   .description('Mask PII and credentials before they leave your machine')
-  .version('1.1.0')
+  // Read from package.json rather than restated here: the two drifted at the
+  // 1.2.0 bump and `kakashi --version` reported a release that no longer existed.
+  .version(require('../package.json').version)
   .option('--lang <code>', 'CLI language: en | ar (default: env LANG / KAKASHI_LANG)');
 
 program
