@@ -2,9 +2,9 @@
 /**
  * build-metric-evidence.js
  *
- * Generates one standalone PDF per UAE AI Award metric so each can be
- * attached individually to the corresponding row in the award submission
- * portal. Each PDF is:
+ * Generates one standalone PDF per impact metric so each can be attached
+ * individually to the corresponding row of a procurement or evaluation
+ * form. Each PDF is:
  *
  *   - single sheet of A4 (fits on one page)
  *   - self-contained (no external CDN)
@@ -31,8 +31,8 @@ const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 
 // ---------------------------------------------------------------------------
-// Metric data — the single source of truth for numbers cited in the award.
-// Every field is short and defensible against a jury that will count.
+// Metric data — the single source of truth for the numbers Kakashi cites.
+// Every field is short and defensible against a reviewer who will count.
 // ---------------------------------------------------------------------------
 const METRICS = [
   {
@@ -305,7 +305,7 @@ function renderHtml(m) {
 <body>
 
 <div class="brand">kakashi · sovereign privacy for agentic AI</div>
-<div class="criterion">UAE AI Award · Metric ${m.n} of 10 · ${esc(m.criterion)}</div>
+<div class="criterion">Metric ${m.n} of 10 · ${esc(m.criterion)}</div>
 
 <h1>Metric ${m.n} — ${esc(m.title)}</h1>
 <div class="subtitle">${esc(m.metric)}</div>

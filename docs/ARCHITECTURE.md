@@ -1,6 +1,7 @@
 # Kakashi Architecture (v1.1)
 
-> This document is the technical evidence layer for the "AI maturity" criterion of the UAE AI Award submission. Every claim in [UAE_AI_AWARD_SUBMISSION.md](UAE_AI_AWARD_SUBMISSION.md) is backed by the components documented below.
+> This document is the technical reference for how Kakashi works: every claim
+> made elsewhere about the system is backed by the components documented below.
 
 ---
 
@@ -358,7 +359,6 @@ GitHub Actions example:
 
 - [../README.md](../README.md) — English overview
 - [../README.ar.md](../README.ar.md) — Arabic overview
-- [UAE_AI_AWARD_SUBMISSION.md](UAE_AI_AWARD_SUBMISSION.md) — award submission
 - [UAE_PILOT_KIT.md](UAE_PILOT_KIT.md) — pilot outreach kit
 - [DEMO_VIDEO_UAE.md](DEMO_VIDEO_UAE.md) — video production kit
 - [CONTRIBUTING.md](CONTRIBUTING.md)

@@ -192,12 +192,7 @@ pattern from @lauraabdul that detects secrets in SQL `IDENTIFIED BY` /
   diagrams, STRIDE threat model, trust-boundary diagram, agent integration
   protocol, and OECD + UAE ethical-AI alignment table.
 - `docs/TECHNICAL_IMPLEMENTATION.pdf` — 16-page A4 technical brief for
-  award / procurement / audit submissions. Regenerate with
-  `npm run docs:pdf`.
-- `docs/UAE_AI_AWARD_SUBMISSION.md` — one-page executive summary mapped to
-  the five UAE AI Award evaluation criteria.
-- `docs/UAE_AWARD_METRICS.md` — 10 quantified impact metrics, each with a
-  matching per-metric evidence PDF under `docs/evidence/`.
+  procurement / audit review. Regenerate with `npm run docs:pdf`.
 - `docs/UAE_PILOT_KIT.md` — 30-minute pitch script, objection-handling
   table, and testimonial template for UAE outreach.
 - `docs/DEMO_VIDEO_UAE.md` — bilingual 60-second video production kit.

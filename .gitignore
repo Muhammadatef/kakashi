@@ -35,3 +35,7 @@ logs/
 
 # Local-only working notes — never committed, never pushed.
 PROJECT_SUMMARY.md
+
+# Generated metric evidence sheets — kept locally, not published to the repo.
+# Rebuild at any time with `npm run docs:metrics`.
+docs/evidence/

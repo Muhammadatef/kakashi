@@ -5,7 +5,7 @@ Internal draft. Customize before posting.
 > **Hero image:** attach `logo.png` (1024×1024) from the repo root — that's the Kakashi mask icon you'll use across all socials.
 > **Latest draft:** see "Post option V1.2 (RECOMMENDED — the Guardian release)" immediately below. It announces the Guardian loop, run-aware .docx/.pptx masking, and the now-proven database drivers. It carries a prerequisite: the branch must be merged and published first.
 >
-> **v1.1 launch:** see the "Post option V1.1" section — it announces the UAE-native features, database masking, agent-guard daemon, and the UAE AI Award narrative.
+> **v1.1 launch:** see the "Post option V1.1" section — it announces the UAE-native features, database masking, and the agent-guard daemon.
 
 ---
 
@@ -53,7 +53,7 @@ Sovereignty is not a slogan on a privacy tool. It is a property you have to be a
 
 Repo and changelog in the first comment.
 
-#AgenticAI #Privacy #OpenSource #Sovereignty #PDPL #AI #DeveloperTools #MadeInTheUAE #UAEAIAward
+#AgenticAI #Privacy #OpenSource #Sovereignty #PDPL #AI #DeveloperTools #MadeInTheUAE
 
 ---
 
@@ -108,8 +108,8 @@ it blocks and writes nothing.
 
 ## Post option V1.1 (superseded by V1.2 — sovereign privacy launch)
 
-> **Best for:** announcing Kakashi v1.1.0, the sovereign-privacy release. Already shipped — kept for reference and for reusable hook lines. Post before or right after submitting to the UAE AI Award so the "made in the UAE" narrative is timely.
-> **Hook strategy:** open with a real-world catch (the leaked API key we found on a live UAE stack yesterday), pivot to what shipped, close with the award angle.
+> **Best for:** announcing Kakashi v1.1.0, the sovereign-privacy release. Already shipped — kept for reference and for reusable hook lines.
+> **Hook strategy:** open with a real-world catch (the leaked API key we found on a live UAE stack yesterday), pivot to what shipped, close with the "made in the UAE" angle.
 
 ---
 
@@ -133,7 +133,7 @@ New in v1.1 — the sovereign-privacy release:
 
 **Zero network calls. Zero telemetry. 101 automated tests. MIT licence.**
 
-Now submitting Kakashi to the UAE AI Award (3rd edition, "Agentic AI Solutions Developed in the UAE" category). The pitch: as the UAE rolls agentic AI into 50% of government services, Kakashi is the local privacy layer that makes that push safe for citizen data.
+The pitch: as the UAE rolls agentic AI into 50% of government services, Kakashi is the local privacy layer that makes that push safe for citizen data.
 
 Install in 30 seconds:
 
@@ -143,7 +143,7 @@ Repo, npm, and full changelog in the first comment.
 
 Open to feedback, PRs, and pilots with any UAE ministry, bank, or hospital that wants a compliance-ready privacy layer for its AI programme.
 
-#UAEAIAward #AgenticAI #Privacy #OpenSource #Sovereignty #PDPL #AI #DeveloperTools #MadeInTheUAE
+#AgenticAI #Privacy #OpenSource #Sovereignty #PDPL #AI #DeveloperTools #MadeInTheUAE
 
 ---
 
@@ -219,7 +219,7 @@ MIT licence. 110 automated tests. npm provenance-signed. Made in the UAE.
 
 If you're a UAE ministry, bank, hospital, insurer, or agency running an AI programme, I would genuinely like to pilot this with your team — DM me. First-time contributors are welcome on the repo too.
 
-#UAEAIAward #AgenticAI #Privacy #PDPL #Compliance #DataProtection #OpenSource #MadeInTheUAE
+#AgenticAI #Privacy #PDPL #Compliance #DataProtection #OpenSource #MadeInTheUAE
 
 ---
 
