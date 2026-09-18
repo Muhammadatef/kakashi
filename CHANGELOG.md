@@ -37,6 +37,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`--stdin` could not be used the way it was documented.** `kakashi mask --stdin` is
+  described as "read from stdin, write to stdout", but the file argument was declared
+  required, so the documented invocation failed with *"missing required argument 'file'"*
+  and the only way through was a placeholder path (`/dev/stdin`) that `--stdin` then
+  ignored. The argument is optional now, and required only when `--stdin` is absent.
 - **Names silently survived masking in spreadsheets.** Eleven patterns separated their
   tokens with `\s`, which matches newlines. `engine/formats/xlsx.js` flattens every cell
   into one newline-joined string for detection and writes back per cell, so a match

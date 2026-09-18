@@ -45,7 +45,14 @@ function finishWith(code) {
 }
 
 async function processFile(filePath, options, action) {
-  if (!fs.existsSync(filePath)) {
+  // `--stdin` reads fd 0, so the file argument is meaningless there and is
+  // declared optional. Everything else needs a real path. The existence check
+  // therefore has to come AFTER the stdin branch below, not before it.
+  if (!options.stdin && !filePath) {
+    console.error(chalk.red('Error: missing file argument (or pass --stdin to read from stdin)'));
+    process.exit(2);
+  }
+  if (!options.stdin && !fs.existsSync(filePath)) {
     console.error(chalk.red(`Error: File not found: ${filePath}`));
     process.exit(2);
   }
@@ -155,7 +162,7 @@ program
   .option('--lang <code>', 'CLI language: en | ar (default: env LANG / KAKASHI_LANG)');
 
 program
-  .command('scan <file>')
+  .command('scan [file]')
   .description('Scan file and report finding counts (no files written, no secret previews)')
   .option('--stdin', 'Read from stdin')
   .option('-v, --verbose', 'Show per-finding previews (NOT agent-safe — leaks truncated secret values to stdout)')
@@ -164,7 +171,7 @@ program
   });
 
 program
-  .command('audit <file>')
+  .command('audit [file]')
   .description('Show original->token mapping for every finding (DELIBERATELY VERBOSE — exposes plaintext secrets to stdout)')
   .option('--stdin', 'Read from stdin')
   .action(async (file, options) => {
@@ -172,7 +179,7 @@ program
   });
 
 program
-  .command('mask <file>')
+  .command('mask [file]')
   .description('Mask PII/credentials and write masked version')
   .option('-o, --output <path>', 'Output path')
   .option('-m, --mode <mode>', 'typed|redact|fake', 'typed')
@@ -180,7 +187,7 @@ program
   .option('--overwrite', 'Overwrite original file')
   .option('--stdin', 'Read from stdin, write to stdout')
   .action(async (file, options) => {
-    if (options.overwrite && !options.output) {
+    if (options.overwrite && !options.output && file) {
       options.output = file;
     }
     await processFile(file, options, 'mask');

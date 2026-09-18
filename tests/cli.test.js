@@ -112,17 +112,53 @@ function runCliTests() {
 
   check('scan-dir --format json is not truncated through a pipe', () => {
     const fixtures = path.join(__dirname, 'fixtures');
-    const expected = Number(shell(
-      `node ${CLI} scan-dir ${fixtures} -f json 2>/dev/null | wc -c`,
-    ).stdout.trim());
-    const through = Number(shell(
-      `node ${CLI} scan-dir ${fixtures} -f json 2>/dev/null | cat | wc -c`,
-    ).stdout.trim());
 
-    if (expected <= 65536) throw new Error('fixture report too small to exercise the pipe buffer');
-    if (through !== expected) {
-      throw new Error(`json report truncated through a pipe: ${through} of ${expected} bytes`);
+    // Two runs of the same scan differ by a few bytes -- `durationMs` and
+    // `scannedAt` are wall-clock, and an integer that grows a digit changes the
+    // length. Comparing raw byte counts therefore fails at random, so compare
+    // the reports themselves with the timing fields normalised away.
+    function report(cmd) {
+      const raw = shell(cmd).stdout;
+      const parsed = JSON.parse(raw);
+      parsed.durationMs = 0;
+      parsed.scannedAt = '';
+      return { bytes: Buffer.byteLength(raw), json: JSON.stringify(parsed) };
     }
+
+    const direct = report(`node ${CLI} scan-dir ${fixtures} -f json 2>/dev/null`);
+    const through = report(`node ${CLI} scan-dir ${fixtures} -f json 2>/dev/null | cat`);
+
+    if (direct.bytes <= 65536) throw new Error('fixture report too small to exercise the pipe buffer');
+    if (through.json !== direct.json) {
+      throw new Error(
+        `json report altered through a pipe: ${through.bytes} vs ${direct.bytes} bytes`,
+      );
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // `--stdin` is documented as "read from stdin, write to stdout", but the file
+  // argument was declared required, so the documented invocation
+  // (`kakashi mask --stdin < file`) failed with "missing required argument".
+  // The only way through was to pass a placeholder path that --stdin then
+  // ignored. The argument is now optional, and required only without --stdin.
+  // ---------------------------------------------------------------------------
+  check('mask --stdin works with no file argument', () => {
+    const r = shell(`printf 'a@b.com\n' | node ${CLI} mask --stdin`);
+    if (r.status !== 0) throw new Error(`expected exit 0, got ${r.status}: ${r.stderr}`);
+    if (!r.stdout.includes('[EMAIL_1]')) throw new Error(`stdin not masked: ${r.stdout}`);
+  });
+
+  check('scan --stdin works with no file argument', () => {
+    const r = shell(`printf 'a@b.com\n' | node ${CLI} scan --stdin`);
+    if (r.status !== 1) throw new Error(`expected exit 1 (findings), got ${r.status}: ${r.stderr}`);
+    if (!r.stdout.includes('(stdin)')) throw new Error('stdin header missing');
+  });
+
+  check('mask with neither file nor --stdin fails with a usable message', () => {
+    const r = runCli(['mask']);
+    if (r.status !== 2) throw new Error(`expected exit 2, got ${r.status}`);
+    if (!/--stdin/.test(r.stderr)) throw new Error(`message does not mention --stdin: ${r.stderr}`);
   });
 
   // ---------------------------------------------------------------------------
