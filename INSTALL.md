@@ -34,6 +34,27 @@ npm link
 node bin/install.js --all --with-init
 ```
 
+## Upgrade
+
+```bash
+kakashi --version                              # what you have now
+npm install -g @muhammadatef/kakashi@latest    # get the latest
+```
+
+Then re-run the installer so your agents pick up any new commands and rules —
+the agent rules are written at install time, so an upgraded binary alone is not
+enough:
+
+```bash
+node "$(npm root -g)/@muhammadatef/kakashi/bin/install.js" --all --force
+```
+
+Re-running the one-liner at the top of this file does both steps and is safe to
+repeat. Upgrading is non-destructive: Kakashi only rewrites the block between
+its `<!-- kakashi-begin -->` / `<!-- kakashi-end -->` markers, leaving the rest
+of your `CLAUDE.md`, `AGENTS.md` and Cursor rules untouched. No config migration
+is needed from 1.0 or 1.1.
+
 ## Per-agent install
 
 | Agent | Command | Auto-activates? |
