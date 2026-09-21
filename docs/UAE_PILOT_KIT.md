@@ -1,16 +1,16 @@
 # Kakashi UAE Pilot Kit
 
-Everything needed to secure the first UAE reference customer for the UAE AI Award submission (workstream B2 of the roadmap).
+Everything needed to secure the first UAE reference customer (workstream B2 of the roadmap).
 
 > Securing an actual UAE deployment is a business-development task, not a code task — but everything a UAE Data Protection Officer or CIO needs to say **yes** in a 30-minute meeting is included in this kit.
 
 ---
 
-## Target list — descending order of award-narrative impact
+## Target list — descending order of reference-story impact
 
 | # | Target | Why they matter | Pitch angle |
 | :-: | --- | --- | --- |
-| 1 | **A UAE federal ministry** (Ministry of AI / Ministry of Interior / MOHRE) | A ministry testimonial makes Kakashi a "used by UAE government" story — highest impact for the award. | Kakashi enables safe agentic AI in 50%-of-services goal. |
+| 1 | **A UAE federal ministry** (Ministry of AI / Ministry of Interior / MOHRE) | A ministry testimonial makes Kakashi a "used by UAE government" story — the highest-impact reference available. | Kakashi enables safe agentic AI in 50%-of-services goal. |
 | 2 | **UAE Data Office** (data.gov.ae) | The regulator itself using Kakashi is the ultimate stamp. | Kakashi is a compliance instrument, not just a security tool. |
 | 3 | **A UAE bank** (Emirates NBD, ADCB, FAB, Mashreq) | Banks are the most PII-heavy verticals; a bank testimonial closes the "enterprise-ready" objection. | Preventing PDPL Art. 22 (cross-border) violations. |
 | 4 | **A UAE telco** (e&, du) | Telcos handle millions of Emirates IDs; testimonial signals scale. | Emirates-ID mass masking. |
@@ -52,7 +52,7 @@ Everything needed to secure the first UAE reference customer for the UAE AI Awar
 
 **Close (3 min):**
 
-> "The UAE AI Award submission is due [DATE]. A 2-line testimonial from you would materially strengthen the submission. You get: (a) a free enterprise privacy tool for your team, (b) named recognition in the submission and follow-up press, and (c) preferential feature-request treatment for v1.2. May I send the pilot pack today?"
+> "A 2-line testimonial from you would materially strengthen the case for this tool. You get: (a) a free enterprise privacy tool for your team, (b) named recognition in the project and follow-up press, and (c) preferential feature-request treatment for v1.2. May I send the pilot pack today?"
 
 ---
 
@@ -62,7 +62,6 @@ Attach these files by name:
 
 - [README.md](../README.md) — English overview
 - [README.ar.md](../README.ar.md) — Arabic overview
-- [UAE_AI_AWARD_SUBMISSION.md](UAE_AI_AWARD_SUBMISSION.md) — how Kakashi maps to national priorities
 - [ARCHITECTURE.md](ARCHITECTURE.md) — threat model + data-flow diagrams
 - One-page PDF export of the compliance report from `kakashi scan-dir` (use `chrome --headless --print-to-pdf`)
 
@@ -87,7 +86,7 @@ After the pilot, ask for:
 
 > "During a 5-day pilot at a UAE federal ministry, Kakashi surfaced 4,213 Emirates IDs and 812 credentials that would otherwise have entered external agentic-AI contexts."
 
-Anonymised metrics are still admissible in the award submission and preserve confidentiality for the pilot partner.
+Anonymised metrics still carry weight publicly and preserve confidentiality for the pilot partner.
 
 ---
 
@@ -104,11 +103,10 @@ Anonymised metrics are still admissible in the award submission and preserve con
 
 Kakashi delivers to the pilot partner:
 
-1. Named acknowledgement in the UAE AI Award submission (opt-in).
-2. Named acknowledgement in the [README.md](../README.md) "Used by" section (opt-in).
-3. Direct maintainer channel (email + weekly call) for the duration of the pilot.
-4. Any UAE-specific feature request the pilot needs, prioritised into v1.2.
-5. Bilingual case-study PDF written jointly with the partner's comms team.
+1. Named acknowledgement in the [README.md](../README.md) "Used by" section (opt-in).
+2. Direct maintainer channel (email + weekly call) for the duration of the pilot.
+3. Any UAE-specific feature request the pilot needs, prioritised into v1.2.
+4. Bilingual case-study PDF written jointly with the partner's comms team.
 
 ---
 

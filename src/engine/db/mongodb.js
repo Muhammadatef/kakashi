@@ -11,7 +11,7 @@
  * This keeps the CLI shape consistent across SQL and NoSQL drivers.
  */
 
-async function* query(conn, jsonQuery) {
+async function* query(conn, jsonQuery, options = {}) {
   let MongoClient;
   try {
     ({ MongoClient } = require('mongodb'));
@@ -34,7 +34,11 @@ async function* query(conn, jsonQuery) {
   try {
     const db = client.db(); // uses db from connection string
     const cursor = db.collection(spec.collection).find(spec.filter || {});
-    if (spec.limit) cursor.limit(spec.limit);
+    // The query's own `limit` and the CLI's `--limit` are both caps, so the
+    // smaller wins. Previously `--limit` was ignored here entirely and enforced
+    // only by counting rows client-side.
+    const caps = [spec.limit, options.limit].filter((n) => Number.isInteger(n) && n > 0);
+    if (caps.length) cursor.limit(Math.min(...caps));
     if (spec.projection) cursor.project(spec.projection);
     for await (const doc of cursor) {
       yield doc;

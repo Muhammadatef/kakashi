@@ -3,10 +3,9 @@
  *
  * Concept
  * -------
- * Agent-guard is Kakashi's answer to the question that unlocks the
- * "Agentic AI Solutions Developed in the UAE" category of the UAE AI Award:
+ * Agent-guard is Kakashi's answer to a single question:
  *
- *   "How do you make agentic AI safe to deploy at national scale?"
+ *   "How do you make agentic AI safe to deploy at scale?"
  *
  * The answer is to give every agent a *local privacy sidecar* it can
  * consult before it ships anything to an external LLM. Agent-guard is

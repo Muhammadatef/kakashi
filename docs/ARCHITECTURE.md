@@ -1,6 +1,7 @@
 # Kakashi Architecture (v1.1)
 
-> This document is the technical evidence layer for the "AI maturity" criterion of the UAE AI Award submission. Every claim in [UAE_AI_AWARD_SUBMISSION.md](UAE_AI_AWARD_SUBMISSION.md) is backed by the components documented below.
+> This document is the technical reference for how Kakashi works: every claim
+> made elsewhere about the system is backed by the components documented below.
 
 ---
 
@@ -161,6 +162,26 @@ sequenceDiagram
 | --- | --- | --- |
 | [src/agent/guard.js](../src/agent/guard.js) | Loopback HTTP daemon + fs watcher | `start(opts)`, `scanFile`, `maskFile` |
 
+### 3.4 Guardian (v1.2)
+
+The autonomous protection loop. Orchestrates the layers above; adds no detection or
+transformation capability of its own. Runs in-process — no daemon required. See
+[AGENTIC_ARCHITECTURE.md](AGENTIC_ARCHITECTURE.md) for the full design.
+
+| Module | Purpose | Public API |
+| --- | --- | --- |
+| [src/guardian/index.js](../src/guardian/index.js) | The agent loop | `runGuardian(opts)`, `DECISIONS` |
+| [src/guardian/classes.js](../src/guardian/classes.js) | 35 pattern ids → 9 sensitivity classes | `classOf`, `patternIdsFor` |
+| [src/guardian/state.js](../src/guardian/state.js) | Run memory; drives replanning | `GuardianState`, `STATUS` |
+| [src/guardian/observe.js](../src/guardian/observe.js) | Sensor over `maskText` + `summarize`; metadata only | `observe(path)` |
+| [src/guardian/risk.js](../src/guardian/risk.js) | Contextual score + reason codes | `RiskEngine.assess` |
+| [src/guardian/policy.js](../src/guardian/policy.js) | Deterministic authority over any planner | `PolicyGuard.validate` |
+| [src/guardian/planner.js](../src/guardian/planner.js) | Minimum-necessary plan + escalation ladder | `Planner.createPlan` |
+| [src/guardian/executor.js](../src/guardian/executor.js) | Authorised plan → existing engine | `Executor.execute` |
+| [src/guardian/verifier.js](../src/guardian/verifier.js) | Re-reads and re-scans the artifact | `Verifier.verify` |
+| [src/guardian/audit.js](../src/guardian/audit.js) | Value-free decision events (JSONL) | `buildEvent`, `write` |
+| [src/guardian/paths.js](../src/guardian/paths.js) | realpath / containment / symlink checks | `resolveResource`, `resolveOutput` |
+
 ---
 
 ## 4. Threat model (STRIDE)
@@ -299,6 +320,15 @@ UAE-specific overlays:
 | 1 | Findings detected | Fail the pipeline; the JSONL/JSON report shows what and where |
 | 2 | Error (file not found, driver missing, etc.) | Investigate before shipping |
 
+`kakashi guard` returns a decision rather than a finding count:
+
+| Code | Meaning | CI usage |
+| --- | --- | --- |
+| 0 | `ALLOW` / `ALLOW_WITH_TRANSFORMATION` | Safe to release; use the artifact |
+| 2 | Error — failed closed, nothing written | Investigate |
+| 3 | `REQUIRE_APPROVAL` — nothing written | Route to a human |
+| 4 | `BLOCK` — nothing written | Stop |
+
 GitHub Actions example:
 
 ```yaml
@@ -329,7 +359,6 @@ GitHub Actions example:
 
 - [../README.md](../README.md) — English overview
 - [../README.ar.md](../README.ar.md) — Arabic overview
-- [UAE_AI_AWARD_SUBMISSION.md](UAE_AI_AWARD_SUBMISSION.md) — award submission
 - [UAE_PILOT_KIT.md](UAE_PILOT_KIT.md) — pilot outreach kit
 - [DEMO_VIDEO_UAE.md](DEMO_VIDEO_UAE.md) — video production kit
 - [CONTRIBUTING.md](CONTRIBUTING.md)

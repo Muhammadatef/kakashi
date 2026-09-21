@@ -72,6 +72,35 @@ async function runDbTests() {
       `expected credential detection, got: ${[...kinds].join(', ')}`);
   });
 
+  // -------------------------------------------------------------------------
+  // Referential integrity across rows.
+  //
+  // maskRows() masks one row per maskText() call. Without token state shared
+  // across the stream, every row restarted numbering at `_1`: mock:customers
+  // has five DIFFERENT people and all five masked to [FULL_NAME_1]. Nothing
+  // leaked, but the masked rows became useless -- an agent asked "how many
+  // distinct customers?" would answer 1. These assert the opposite.
+  // -------------------------------------------------------------------------
+  await check('streamMasked — distinct people get distinct tokens across rows', async () => {
+    const stream = streamMasked('mock:customers', '');
+    const names = [];
+    for await (const { masked } of stream) names.push(masked.name);
+    assert.strictEqual(names.length, 5, `expected 5 rows, got ${names.length}`);
+    assert.strictEqual(new Set(names).size, 5,
+      `five distinct customers must yield five distinct tokens, got: ${names.join(', ')}`);
+  });
+
+  await check('streamMasked — tokens are stable, not merely unique', async () => {
+    // Every row of mock:customers carries a distinct email, id and iban too.
+    const stream = streamMasked('mock:customers', '');
+    const emails = [];
+    for await (const { masked } of stream) emails.push(masked.email);
+    assert.strictEqual(new Set(emails).size, 5, `emails collapsed: ${emails.join(', ')}`);
+    // Numbering must run 1..5 rather than restarting per row.
+    assert(emails.some((e) => /_5\]$/.test(e)),
+      `expected numbering to reach _5 across the stream, got: ${emails.join(', ')}`);
+  });
+
   await check('CLI db-scan mock:customers exits 1 (findings present)', () => {
     const r = spawnSync(process.execPath, [CLI, 'db-scan', 'mock:customers', '-q', 'ignored'], { encoding: 'utf8' });
     if (r.status !== 1) throw new Error(`expected exit 1, got ${r.status}\n${r.stdout}\n${r.stderr}`);

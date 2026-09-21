@@ -5,7 +5,7 @@
 **Format:** Native `.mp4`, H.264, ≤200 MB
 **Captions:** Burned onto every frame (75% of LinkedIn plays are muted)
 **Voiceover:** Optional but recommended; bilingual (English + Arabic subtitles)
-**Distribution:** LinkedIn native upload, UAE AI Award portal, GitHub README banner
+**Distribution:** LinkedIn native upload, GitHub README banner
 
 ---
 
@@ -91,4 +91,3 @@ Use only SYNTHETIC UAE-shaped data. Never record real files.
 - [ ] Bilingual variant exported separately for the Arabic-first LinkedIn audience
 - [ ] LinkedIn native upload (NOT a YouTube link)
 - [ ] GitHub README banner (`docs/assets/demo.gif`) — 800×800, ≤3 MB
-- [ ] Submitted to the UAE AI Award portal as supporting evidence

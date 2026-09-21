@@ -1,10 +1,12 @@
 name: CI
 
-# Runs the full 101-test suite on every push and PR across the three Node
-# major versions Kakashi supports. Kept intentionally boring: no linting,
-# no coverage upload, no matrix expansion — just: does it install, does it
-# test green. The test suite already runs offline in < 3 seconds so we
-# don't need any caching cleverness.
+# Runs the full test suite on every push and PR across the three Node major
+# versions Kakashi supports. Kept intentionally boring: no linting, no coverage
+# upload, no matrix expansion — just: does it install, does it test green. The
+# suite runs offline in a few seconds, so we don't need any caching cleverness.
+#
+# Database tests run against a real Postgres service container and a real
+# on-disk SQLite file. Everything else stays offline.
 
 on:
   push:
@@ -26,6 +28,28 @@ jobs:
       matrix:
         node: ['18', '20', '22']
 
+    # A real Postgres, so the `pg` adapter is exercised against a server rather
+    # than against a mock. The driver tests skip themselves (and say so) when
+    # KAKASHI_TEST_POSTGRES_URL is absent, so this is the difference between the
+    # adapter being covered and being merely present.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kakashi
+          POSTGRES_PASSWORD: kakashi
+          POSTGRES_DB: kakashi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kakashi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      KAKASHI_TEST_POSTGRES_URL: postgres://kakashi:kakashi@127.0.0.1:5432/kakashi_test
+
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -34,12 +58,27 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          # Cache the npm registry to speed up subsequent runs without
-          # requiring a package-lock.json (Kakashi has never shipped one).
           cache: 'npm'
 
+      # Deliberately `npm install`, not `npm ci`.
+      #
+      # `npm ci` would be the reproducible choice, but it cannot be used while
+      # `snowflake-sdk` is an optionalDependency: npm resolves its transitive
+      # `gcp-metadata` to 6.1.1 while the tree asks for 5.3.0, and writes a
+      # lockfile that `npm ci` then rejects as out of sync. That happens even
+      # for a lockfile npm has just generated from a clean `npm install`, and
+      # `--omit=optional` does not help because `ci` validates the whole file
+      # before installing anything. Revisit if snowflake-sdk is dropped or the
+      # conflict is fixed upstream.
       - name: Install
         run: npm install --no-audit --no-fund
+
+      # The database drivers are optionalDependencies, so `npm install` may or
+      # may not have landed them. Installing the two the suite can actually use
+      # explicitly means a missing driver fails the build instead of quietly
+      # turning the driver tests into skips.
+      - name: Install database drivers under test
+        run: npm install --no-save --no-audit --no-fund pg better-sqlite3
 
       - name: Test
         run: npm test

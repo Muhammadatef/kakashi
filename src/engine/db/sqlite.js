@@ -1,3 +1,5 @@
+const { sqlWithLimit } = require('./limit');
+
 /**
  * SQLite driver adapter.
  *
@@ -7,7 +9,7 @@
  * Connection string: a file path like "./local.db" or ":memory:".
  */
 
-async function* query(conn, sql) {
+async function* query(conn, sql, options = {}) {
   let Database;
   try {
     Database = require('better-sqlite3');
@@ -17,7 +19,7 @@ async function* query(conn, sql) {
 
   const db = new Database(conn, { readonly: true, fileMustExist: conn !== ':memory:' });
   try {
-    const rows = db.prepare(sql).all();
+    const rows = db.prepare(sqlWithLimit(sql, options.limit)).all();
     for (const row of rows) {
       yield row;
     }
