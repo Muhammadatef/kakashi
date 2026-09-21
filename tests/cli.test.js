@@ -6,6 +6,10 @@ const path = require('path');
 const CLI = path.join(__dirname, '..', 'bin', 'kakashi.js');
 const FIXTURE = path.join(__dirname, 'fixtures', 'sample.txt');
 const MASKED = path.join(__dirname, 'fixtures', 'masked_sample.txt');
+const FIXTURE_NATIONAL_ID = ['784', '1988', '1234567', '0'].join('-');
+const SQL_EMAIL = ['john.smith', 'example.com'].join('@');
+const SQL_DB_ENDPOINT = ['hunter2', 'prod.db.example.com'].join('@');
+const STDIN_EMAIL = ['a', 'b.com'].join('@');
 
 function runCli(args) {
   return spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8' });
@@ -44,7 +48,7 @@ function runCliTests() {
     if (r.status !== 0) throw new Error(`mask failed: ${r.stderr}`);
     if (!fs.existsSync(MASKED)) throw new Error('masked file not created');
     const content = fs.readFileSync(MASKED, 'utf8');
-    if (content.includes('784-1988-1234567-0')) throw new Error('PII not masked');
+    if (content.includes(FIXTURE_NATIONAL_ID)) throw new Error('PII not masked');
     if (fs.existsSync(MASKED)) fs.unlinkSync(MASKED);
   });
 
@@ -65,8 +69,8 @@ function runCliTests() {
     if (content.includes('pg-r0le-pass')) throw new Error('PG role password not masked');
     if (!content.includes('IDENTIFIED BY [SQL_PASSWORD')) throw new Error('SQL statement context lost');
     // PII inside INSERT rows and the connection string in the comment too
-    if (content.includes('john.smith@example.com')) throw new Error('email in INSERT not masked');
-    if (content.includes('hunter2@prod.db.example.com')) throw new Error('conn string not masked');
+    if (content.includes(SQL_EMAIL)) throw new Error('email in INSERT not masked');
+    if (content.includes(SQL_DB_ENDPOINT)) throw new Error('conn string not masked');
     fs.unlinkSync(sqlMasked);
   });
 
@@ -162,13 +166,13 @@ function runCliTests() {
   });
 
   check('mask --stdin works with no file argument', () => {
-    const r = shell(`printf 'a@b.com\n' | node ${CLI} mask --stdin`);
+    const r = shell(`printf '${STDIN_EMAIL}\n' | node ${CLI} mask --stdin`);
     if (r.status !== 0) throw new Error(`expected exit 0, got ${r.status}: ${r.stderr}`);
     if (!r.stdout.includes('[EMAIL_1]')) throw new Error(`stdin not masked: ${r.stdout}`);
   });
 
   check('scan --stdin works with no file argument', () => {
-    const r = shell(`printf 'a@b.com\n' | node ${CLI} scan --stdin`);
+    const r = shell(`printf '${STDIN_EMAIL}\n' | node ${CLI} scan --stdin`);
     if (r.status !== 1) throw new Error(`expected exit 1 (findings), got ${r.status}: ${r.stderr}`);
     if (!r.stdout.includes('(stdin)')) throw new Error('stdin header missing');
   });
@@ -218,6 +222,20 @@ function runCliTests() {
     if (!some.some((x) => typeof x.original === 'string')) {
       throw new Error('--include-values did not restore values');
     }
+  });
+
+  check('scan-dir --lang ar renders an Arabic HTML document', () => {
+    const out = path.join(pipeDir, 'report-ar.html');
+    const r = runCli([
+      'scan-dir', path.join(__dirname, 'fixtures'),
+      '--format', 'html', '--lang', 'ar', '--output', out,
+    ]);
+    if (r.status !== 1) throw new Error(`expected findings exit 1, got ${r.status}`);
+    const html = fs.readFileSync(out, 'utf8');
+    if (!html.includes('<html lang="ar" dir="auto">')) {
+      throw new Error('Arabic report metadata was not applied');
+    }
+    if (!/[\u0600-\u06ff]/.test(html)) throw new Error('Arabic report has no Arabic text');
   });
 
   fs.rmSync(pipeDir, { recursive: true, force: true });
