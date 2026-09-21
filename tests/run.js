@@ -11,6 +11,7 @@ const { runI18nTests } = require('./i18n.test');
 const { runGuardTests } = require('./guard.test');
 const { runGuardianTests } = require('./guardian.test');
 const { runTaskTests } = require('./task.test');
+const { runAgentRuleTests } = require('./agent-rules.test');
 
 (async () => {
   let ok = true;
@@ -27,6 +28,7 @@ const { runTaskTests } = require('./task.test');
   ok = (await runGuardTests()) && ok;
   ok = (await runGuardianTests()) && ok;
   ok = (await runTaskTests()) && ok;
+  ok = runAgentRuleTests() && ok;
 
   console.log(ok ? '\nAll tests passed.' : '\nSome tests failed.');
   process.exit(ok ? 0 : 1);
