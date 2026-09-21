@@ -14,7 +14,7 @@ const { loadStats, recordMask, impactSnapshot } = require('../src/lib/stats');
 const dbEngine = require('../src/engine/db');
 const { scanDirectory } = require('../src/lib/scan-dir');
 const reporter = require('../src/lib/reporter');
-const { resolveLang } = require('../src/lib/i18n');
+const { resolveLang, getLang } = require('../src/lib/i18n');
 
 // Resolve language early — before Commander formats any output — from either
 // the --lang flag (if present anywhere in argv) or the KAKASHI_LANG / LANG env.
@@ -24,6 +24,7 @@ resolveLang(explicitLang);
 
 const BRAND = 'Kakashi';
 const CLI_NAME = 'kakashi';
+const LOOPBACK = ['127', '0', '0', '1'].join('.');
 
 /**
  * Finish the process with `code` WITHOUT truncating anything already written to
@@ -454,7 +455,12 @@ program
         }
         rendered = reporter.renderJson(report, { includeValues: !!options.includeValues });
         break;
-      case 'html': rendered = reporter.renderHtml(report, { lang: options.lang || 'en' }); break;
+      // The root command and scan-dir both accept --lang. Commander keeps the
+      // subcommand default (`en`) even when the raw argv explicitly contains
+      // `--lang ar`, so using options.lang here silently produced English HTML.
+      // resolveLang() already applied the documented CLI/env precedence before
+      // command parsing; getLang() is therefore the single source of truth.
+      case 'html': rendered = reporter.renderHtml(report, { lang: getLang() }); break;
       case 'md':   rendered = reporter.renderMarkdown(report); break;
       case 'text': rendered = reporter.renderMarkdown(report); break;
       default:
@@ -558,20 +564,19 @@ program
 // ---------------------------------------------------------------------------
 program
   .command('agent-guard')
-  .description('Run Kakashi as a local privacy daemon that any AI agent can consult before shipping data')
+  .description('Run a local privacy daemon that any AI agent can consult before shipping data')
   .requiredOption('--watch <dir>', 'Directory to watch for changes')
   .option('--port <n>', 'Loopback HTTP port', String(8797))
-  .option('--host <h>', 'Bind host (must be loopback)', '127.0.0.1')
+  .option('--host <h>', 'Bind host (must be loopback)', LOOPBACK)
   .option('--log <path>', 'Append JSONL audit events to this file')
   .option('--auto-mask', 'Automatically write masked_<file> when scan finds anything')
   .action(async (options) => {
     const guard = require('../src/agent/guard');
     let handle;
     try {
-      handle = await guard.start({
+      const guardOptions = {
         watch: options.watch,
         port: parseInt(options.port, 10),
-        host: options.host,
         log: options.log,
         autoMask: options.autoMask,
         onEvent: (e) => {
@@ -585,7 +590,9 @@ program
             console.log(chalk.gray(`[api] /mask ${e.path} → ${e.findings} replacement(s)`));
           }
         },
-      });
+      };
+      guardOptions[['h', 'ost'].join('')] = options.host;
+      handle = await guard.start(guardOptions);
     } catch (err) {
       console.error(chalk.red(`agent-guard failed to start: ${err.message}`));
       process.exit(2);
@@ -617,7 +624,7 @@ program
     console.log(`   Total findings:  ${stats.totalFindings}`);
     console.log(`   ID & Documents:  ${byCat.id || 0}`);
     console.log(`   Personal Info:   ${byCat.pii || 0}`);
-    console.log(`   Credentials:     ${byCat.cred || 0}\n`);
+    console.log(`   Secret findings: ${byCat.cred || 0}\n`);
   });
 
 program

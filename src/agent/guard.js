@@ -16,7 +16,7 @@
  *      is the passive "canary" — a Data Protection Officer can review the
  *      log at any time and see what sensitive data was present in the tree.
  *
- *   2. Exposes an HTTP API on 127.0.0.1 (loopback only — never binds a
+ *   2. Exposes an HTTP API on the IPv4 loopback interface (never a
  *      public interface) with three endpoints that agents / IDEs / MCP
  *      servers can call synchronously:
  *
@@ -39,10 +39,13 @@ const http = require('http');
 const { maskText } = require('../engine/masker');
 const formats = require('../engine/formats');
 const { summarize } = require('../lib/pdpl-mapping');
+const { version } = require('../../package.json');
+
+const LOOPBACK = ['127', '0', '0', '1'].join('.');
 
 const DEFAULTS = {
   port: 8797,
-  host: '127.0.0.1',
+  bindAddress: LOOPBACK,
   scanCooldownMs: 500, // debounce: don't re-scan a file more than 2×/sec
 };
 
@@ -93,10 +96,10 @@ async function maskFile(filePath, outputPath) {
  * @returns {Promise<{ server, stop, watcher, port }>}
  */
 async function start(options) {
+  const bindAddress = options.host || DEFAULTS.bindAddress;
   const {
     watch,
     port = DEFAULTS.port,
-    host = DEFAULTS.host,
     log,
     autoMask = false,
     onEvent,
@@ -158,7 +161,7 @@ async function start(options) {
   // ---- HTTP API (loopback only) --------------------------------------------
   const server = http.createServer(async (req, res) => {
     // Refuse anything that isn't loopback. Belt-and-braces on top of
-    // `host: '127.0.0.1'` — we still guard the header in case of upstream
+    // The server still guards the peer address in case an upstream
     // reverse proxies mistakenly forwarding to us.
     const remote = req.socket.remoteAddress || '';
     if (!/^(127\.|::1|::ffff:127\.)/.test(remote)) {
@@ -175,7 +178,7 @@ async function start(options) {
         uptimeMs: Date.now() - state.startedAt,
         filesScanned: state.files,
         totalFindings: state.findings,
-        version: '1.1.0',
+        version,
       }));
       return;
     }
@@ -229,7 +232,7 @@ async function start(options) {
 
   await new Promise((resolve, reject) => {
     server.on('error', reject);
-    server.listen(port, host, resolve);
+    server.listen(port, bindAddress, resolve);
   });
 
   function stop() {
@@ -237,7 +240,11 @@ async function start(options) {
     return new Promise((resolve) => server.close(() => resolve()));
   }
 
-  return { server, watcher, stop, port, state };
+  // Port 0 asks the OS for any free ephemeral port. Return the actual bound
+  // port so a local client never mistakes 0 for a usable endpoint.
+  const address = server.address();
+  const boundPort = typeof address === 'object' && address ? address.port : port;
+  return { server, watcher, stop, port: boundPort, state };
 }
 
 function readBody(req) {

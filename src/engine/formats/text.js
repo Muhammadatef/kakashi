@@ -10,7 +10,7 @@ const CODE_EXTS = new Set([
   'clj', 'hs', 'ml', 'f90', 'pl',
   'sh', 'bash', 'zsh', 'fish', 'bat', 'ps1', 'cmd',
   'sql', 'plsql', 'hql', 'psql',
-  'env', 'yaml', 'yml', 'toml', 'json', 'json5', 'jsonl', 'xml',
+  'env', 'yaml', 'yml', 'toml', 'json', 'json5', 'jsonl', 'xml', 'fodp',
   'ini', 'cfg', 'conf', 'config', 'properties', 'dotenv',
   'tf', 'tfvars', 'hcl', 'proto', 'graphql', 'gql',
   'css', 'scss', 'sass', 'less', 'html', 'htm',

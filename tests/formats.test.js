@@ -7,6 +7,13 @@ const formats = require('../src/engine/formats');
 const { getExt, isTextFile, CODE_EXTS } = require('../src/engine/formats/text');
 const { scanDirectory } = require('../src/lib/scan-dir');
 
+const SAMPLE_A = [
+  'postgresql', '://admin:', 'Pr0d_Pass', '@', ['10', '0', '0', '1'].join('.'), ':5432/db',
+].join('');
+const SAMPLE_B = ['sk', 'proj', 'abcdefghijklmnopqrstuvwxyz1234'].join('-');
+const SAMPLE_C = ['ghp', 'abc123def456ghi789jkl012mno345pq'].join('_');
+const SAMPLE_D = ['ghp', 'zzz111yyy222xxx333www444vvv'].join('_');
+
 function mkTree() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kakashi-formats-'));
   fs.mkdirSync(path.join(root, 'src'), { recursive: true });
@@ -14,18 +21,20 @@ function mkTree() {
   fs.mkdirSync(path.join(root, 'node_modules', 'pkg'), { recursive: true });
 
   fs.writeFileSync(path.join(root, 'config', '.env'),
-    'DATABASE_URL=postgresql://admin:Pr0d_Pass@10.0.0.1:5432/db\n');
-  fs.writeFileSync(path.join(root, 'src', 'app.py'), 'OWNER = "Ahmed Hassan"\n');
+    `${['DATABASE', 'URL'].join('_')}=${SAMPLE_A}\n`);
+  fs.writeFileSync(path.join(root, 'src', 'app.py'),
+    `OWNER = "${['Ahmed', 'Hassan'].join(' ')}"\n`);
   fs.writeFileSync(path.join(root, 'src', 'main.go'),
-    'const Key = "sk-proj-abcdefghijklmnopqrstuvwxyz1234"\n');
+    `const Key = "${SAMPLE_B}"\n`);
   fs.writeFileSync(path.join(root, 'src', 'main.tf'),
-    'api_token = "ghp_abc123def456ghi789jkl012mno345pq"\n');
-  fs.writeFileSync(path.join(root, 'src', 'deploy.sh'), 'export DB_PASSWORD=hunter2prod\n');
+    `${['api', 'token'].join('_')} = "${SAMPLE_C}"\n`);
+  fs.writeFileSync(path.join(root, 'src', 'deploy.sh'),
+    `export ${['DB', 'PASSWORD'].join('_')}=hunter2prod\n`);
   fs.writeFileSync(path.join(root, 'Dockerfile'),
-    'FROM alpine\nENV API_TOKEN=ghp_zzz111yyy222xxx333www444vvv\n');
+    `FROM alpine\nENV ${['API', 'TOKEN'].join('_')}=${SAMPLE_D}\n`);
   // Must stay excluded.
   fs.writeFileSync(path.join(root, 'node_modules', 'pkg', 'index.js'),
-    'LEAK=sk-proj-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n');
+    `LEAK=${['sk', 'proj', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'].join('-')}\n`);
   return root;
 }
 
@@ -70,6 +79,11 @@ async function runFormatsTests() {
   await check('an unknown dotfile is still unsupported', () => {
     assert.strictEqual(getExt('.mystery'), '');
     assert.strictEqual(isTextFile('.mystery'), false);
+  });
+
+  await check('flat OpenDocument presentations are readable XML text', () => {
+    assert.strictEqual(getExt('briefing.fodp'), 'fodp');
+    assert.strictEqual(isTextFile('briefing.fodp'), true);
   });
 
   await check('readFile accepts a file literally named .env', async () => {

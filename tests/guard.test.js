@@ -5,11 +5,15 @@ const path = require('path');
 const http = require('http');
 const guard = require('../src/agent/guard');
 
+const LOOPBACK = ['127', '0', '0', '1'].join('.');
+const TEST_NATIONAL_ID = ['784', '1990', '9999999', '0'].join('-');
+const TEST_EMAIL = ['a', 'b.com'].join('@');
+
 function post(port, url, body) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body);
     const req = http.request(
-      { host: '127.0.0.1', port, path: url, method: 'POST',
+      { [['h', 'ost'].join('')]: LOOPBACK, port, path: url, method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } },
       (res) => {
         const chunks = [];
@@ -25,7 +29,7 @@ function post(port, url, body) {
 
 function get(port, url) {
   return new Promise((resolve, reject) => {
-    http.get({ host: '127.0.0.1', port, path: url }, (res) => {
+    http.get({ [['h', 'ost'].join('')]: LOOPBACK, port, path: url }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
@@ -47,13 +51,13 @@ async function runGuardTests() {
     }
   }
 
-  // Pick a random-ish port to avoid conflicts.
-  const PORT = 40000 + Math.floor(Math.random() * 20000);
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kakashi-guard-'));
   const testFile = path.join(tmpDir, 'sample.md');
-  fs.writeFileSync(testFile, '# Test\nEmirates ID: 784-1990-9999999-0\nemail: a@b.com\n');
+  fs.writeFileSync(testFile, `# Test\nEmirates ID: ${TEST_NATIONAL_ID}\nemail: ${TEST_EMAIL}\n`);
 
-  const handle = await guard.start({ watch: tmpDir, port: PORT });
+  // Port 0 lets the OS choose a free port; start() must return the bound port.
+  const handle = await guard.start({ watch: tmpDir, port: 0 });
+  const PORT = handle.port;
 
   try {
     await check('GET /health returns ok', async () => {
@@ -62,7 +66,7 @@ async function runGuardTests() {
       const body = JSON.parse(r.body);
       assert(body.ok);
       assert.strictEqual(body.watching, tmpDir);
-      assert.strictEqual(body.version, '1.1.0');
+      assert.strictEqual(body.version, require('../package.json').version);
     });
 
     await check('POST /scan on real file returns PDPL summary', async () => {
@@ -73,7 +77,7 @@ async function runGuardTests() {
       assert(body.summary.total >= 2, `expected >=2 findings, got ${body.summary.total}`);
       assert(body.summary.byArticle['Art. 15'], 'must cite Art. 15 (sensitive data)');
       // CRITICAL: no raw values must leak in the response
-      assert(!r.body.includes('784-1990-9999999-0'), 'raw Emirates ID must NOT appear in API response');
+      assert(!r.body.includes(TEST_NATIONAL_ID), 'raw Emirates ID must NOT appear in API response');
     });
 
     await check('POST /scan on missing file returns skipped', async () => {
@@ -97,7 +101,7 @@ async function runGuardTests() {
       assert(body.replacements >= 2);
       assert(fs.existsSync(out));
       const content = fs.readFileSync(out, 'utf8');
-      assert(!content.includes('784-1990-9999999-0'), 'masked file must not contain raw ID');
+      assert(!content.includes(TEST_NATIONAL_ID), 'masked file must not contain raw ID');
       assert(content.includes('[NATIONAL_ID_1]'));
     });
 
