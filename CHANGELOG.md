@@ -6,6 +6,86 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.3.0] — 2026-09-23
+
+The **orchestrator release**. Typing `/kakashi` (with or without a sentence
+of intent) now picks the right Kakashi tool automatically — scan, scan-dir,
+mask, mask-dir, guard, db-*, agent-guard — and narrates each decision.
+Users no longer need to know that `/kakashi-guard` exists to get a
+Guardian decision. Guardian's own render exposes the loop as
+THINK → OBSERVE → ASSESS → PLAN → ACT → VERIFY → REACT.
+
+### Added
+
+- **`/kakashi` orchestrator** ([commands/kakashi.md](commands/kakashi.md)).
+  A 12-row intent dispatch table routes every user ask to the correct
+  subcommand. The award-defining scenario — "may Cursor send this file to
+  an external model to average salary?" — deterministically routes to
+  `guard`, not to a silent `mask`. Chain rules (scan → mask → re-scan;
+  scan-dir → guard-per-file; db-scan → db-mask; scan → guard for release
+  questions) are encoded in the same file. Locked by
+  [tests/orchestrator.test.js](tests/orchestrator.test.js).
+- **Always-on Cursor rule mirror**
+  ([src/rules/kakashi-activate.md](src/rules/kakashi-activate.md)). Same
+  intent-based dispatch fires even when the user never types `/kakashi`.
+- **Eight new slash commands** in `commands/`, bringing the total from 6
+  to 14: `kakashi-scan-dir`, `kakashi-mask-dir`, `kakashi-guard`,
+  `kakashi-db-scan`, `kakashi-db-mask`, `kakashi-db-audit`,
+  `kakashi-agent-guard`, `kakashi-impact`. Every human-only variant
+  (`audit`, `db-audit`) opens with a warning that plaintext will enter
+  the conversation.
+- **Guardian human-terminal render now shows the whole loop**
+  ([src/guardian/render.js](src/guardian/render.js)). New `THINK` section
+  restates who is asking, for what, to send where. New `ACT` section
+  reports what was written to the scratch artifact (with replacement
+  counts, never values). Final `REACT` section replaces the plain
+  `DECISION` header so a reader sees the loop labels in loop order.
+  Locked by
+  [tests/guardian-narrative.test.js](tests/guardian-narrative.test.js) —
+  fixture secrets are proven absent from the rendered output.
+- **`agent-guard` Windows fallback**
+  ([src/agent/guard.js](src/agent/guard.js)). `fs.watch` throwing
+  `UNKNOWN: unknown error, watch` on Windows mapped drives / network
+  shares / WSL mounts no longer kills the daemon. The synchronous throw
+  is caught, a `watch_failed` event fires, and the daemon degrades to a
+  polling scanner. Setting `KAKASHI_GUARD_NO_WATCH=1` skips the watcher
+  entirely (HTTP-only mode). `/health` now exposes
+  `"watchMode": "watch" | "poll" | "off"`.
+- **`kakashi impact` snapshot now reads the version from `package.json`**
+  ([src/lib/stats.js](src/lib/stats.js)). Fixes the "kakashiVersion:
+  1.1.0 while CLI is 1.2.0" drift the September 23 report flagged.
+  Locked by [tests/impact.test.js](tests/impact.test.js).
+- **Four new test suites**, +40 assertions on top of the existing 348:
+  `orchestrator`, `guardian-narrative`, `guard-fallback`, `impact`.
+  Full suite: **388 passed, 0 failed** in ~12 seconds.
+
+### Changed
+
+- **`bin/install.js` SLASH_CMDS array** grew from 6 to 14 entries.
+  Documented as a two-step contract with the `commands/` folder; the
+  orchestrator test asserts both lists stay in sync so a future addition
+  cannot skip either half. Installer log lines now say
+  `${SLASH_CMDS.length} slash commands` instead of a stale `"6"`.
+
+### Community
+
+- Credit **[@lauraabdul](https://github.com/lauraabdul)** for the
+  [`sql_password`](https://github.com/Muhammadatef/kakashi/pull/1)
+  detection pattern that landed on `main` between 1.2.0 and 1.3.0 —
+  covers SQL auth clauses like `IDENTIFIED BY '...'` /
+  `WITH PASSWORD '...'` / `ENCRYPTED BY '...'` that `env_secret`'s
+  `[:=]` delimiter never sees. The v1.3.0 PDPL mapping now includes it
+  under Art. 20 + Art. 21.
+
+### Not changed
+
+- The Guardian loop itself, the pattern engine, the installer's agent
+  matrix, and every existing exit code / decision label — all unchanged.
+  This is a UX + testability release; no functional behaviour was
+  weakened.
+
+---
+
 ## [1.2.0] — 2026-09-18
 
 The **Guardian release**. Kakashi stops being a masker you invoke and becomes a
