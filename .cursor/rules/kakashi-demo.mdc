@@ -1,0 +1,28 @@
+---
+description: Enforce Kakashi privacy controls and safely present the manager demo
+alwaysApply: true
+---
+
+# Kakashi guardrail for Cursor Agent
+
+Kakashi is the privacy gate for this workspace. Apply these requirements in
+every Cursor Agent conversation:
+
+1. Before attaching, quoting, uploading, or sending file contents, run
+   `node bin/kakashi.js scan <path>`.
+2. Exit code `1` from `scan`, `db-scan`, or `scan-dir` means sensitive findings
+   were detected; it is not an execution failure.
+3. If findings exist, create a protected artifact and re-scan that artifact.
+4. For contextual release decisions, run `guard` with the agent, task, and
+   destination. Use only its `releasePath` after an allow decision.
+5. Never invent an approval. Stop when Guardian returns `REQUIRE_APPROVAL` or
+   `BLOCK`.
+6. Do not run `audit`, `db-audit`, `--verbose`, or `--include-values` in an
+   agent-visible conversation unless the user explicitly accepts plaintext
+   disclosure.
+7. Never ask the user to attach a sensitive file with an `@` mention. Accept a
+   filesystem path so Kakashi executes before content enters model context.
+
+For the manager demonstration, never open or quote files under
+`demos/.work/input/`. Run the numbered `/kakashi-demo-*` commands and explain
+only their command output, decisions, counts, and verified safety properties.

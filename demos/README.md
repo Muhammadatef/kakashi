@@ -4,6 +4,9 @@ This folder is a repeatable, offline walkthrough of Kakashi 1.2.0. It creates
 synthetic sensitive records at runtime, exercises every CLI protection surface,
 and fails immediately if an expected safety property is not true.
 
+To run the entire presentation from Cursor Agent Chat instead of typing terminal
+commands, follow `CURSOR_CHAT_DEMO.md` and start with `/kakashi-demo-start`.
+
 ## Run the complete demo
 
 From the repository root:
