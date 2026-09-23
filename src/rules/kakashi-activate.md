@@ -1,145 +1,121 @@
-# Kakashi
+---
+description: Kakashi privacy mode - always-on rule that picks the right tool from user intent
+---
 
-Kakashi is installed. You have a `kakashi` CLI tool available on PATH (or
-runnable via `npx -y @muhammadatef/kakashi`). It is a local-first privacy
-layer for files, folders, databases, and agent data-release decisions.
+You have Kakashi available (a local-first privacy layer for files, folders,
+databases, and agent release decisions). Whenever the user's request touches
+sensitive data, **pick the right Kakashi tool from their intent and narrate
+each step**. The user should never need to know which subcommand exists.
 
-## Core Rule — ALWAYS ENFORCE
+## When to act automatically
 
-Before sharing, pasting, uploading, or sending ANY file content to an external
-service, LLM API, or user outside this session:
+Trigger Kakashi any time the user says or implies one of:
 
-1. Run `kakashi scan <file>` to check for sensitive data.
-2. If findings > 0, run `kakashi mask <file>` and use the masked sibling.
-3. Re-scan the masked output before release.
-4. NEVER paste raw contents of files that may contain credentials, national
-   IDs, passports, emails, phone numbers, financial data, or personal records.
+- "share / paste / send / attach this file to (a model / another agent / a
+  human outside this session)" — always a **release decision** → run
+  `kakashi guard` with the stated agent + task + destination and narrate
+  THINK / OBSERVE / ASSESS / PLAN / ACT / VERIFY / REACT. Honour exit codes
+  strictly.
+- "check / scan / is this safe" + a single file → `kakashi scan <path>`.
+- "mask / redact / anonymise this file" → `kakashi scan <path>` (show the
+  finding profile) → `kakashi mask <path>` → re-scan the `masked_*` sibling.
+- "check / scan / audit this folder / repo / project / directory / drive" →
+  `kakashi scan-dir <path> -f html -o kakashi-report.html`.
+- "compliance report / PDPL / estate scan / audit this codebase" → same
+  `scan-dir` flow; frame the output as regulatory evidence with the top
+  PDPL articles cited.
+- "batch mask this folder" → **confirm size first**, then
+  `kakashi mask-dir <dir> -r`.
+- "run a query and mask" / any Postgres / MySQL / Mongo / Snowflake /
+  Databricks / SQLite reference plus a query → `kakashi db-scan` first,
+  then `kakashi db-mask` to a local safe copy. Never `db-audit` in agent
+  chat.
+- "watch this folder / sidecar / daemon / HTTP endpoint for my IDE" →
+  `kakashi agent-guard --watch <dir> --port 8797` on loopback only.
+- "what does Kakashi detect / which patterns" → `kakashi list-patterns`.
+- "how much has Kakashi caught / impact snapshot" → `kakashi impact`.
 
-For a contextual release decision—where the requesting agent, stated task, or
-destination changes what is safe—use `kakashi guard`, not a plain one-pass mask.
+If the intent is ambiguous, ask **one** short question:
+> "Are you asking me to check a file, scan a folder, mask a database query,
+> or decide whether a specific file may be released to an agent?"
 
-## Slash Commands
+## The release-decision rule (Guardian is the authority)
 
-Treat the following as first-class slash commands. Run the matching shell
-command immediately and show only agent-safe output.
+When the user's question is "may this specific file be released to a
+specific destination for a specific task?", the answer must come from
+`kakashi guard --json` — not from a silent `mask`. Guardian returns one of
+four decisions and Kakashi never self-approves:
 
-| User types | You run in shell |
+- `ALLOW` / `ALLOW_WITH_TRANSFORMATION` (exit `0`) — use **only**
+  `releasePath` from the JSON. Never substitute the original path.
+- `REQUIRE_APPROVAL` (exit `3`) — stop and ask the human. Do not run a
+  smaller mask as a workaround. Do not invent approval.
+- `BLOCK` (exit `4`) — do not release. Do not offer a partial release.
+- exit `2` — operational error → fail closed; the safe answer is not to
+  release.
+
+Narrate Guardian's stages from the JSON (`decision`, `reasonCode`, `risk`,
+`task`, `plan.actions`, `verifications`, `releasePath`, `approvalsNeeded`).
+Do NOT open the source file to "explain" the decision; the JSON reason
+codes are the explanation.
+
+## Non-negotiable defaults
+
+- **Path strings, never `@`-mentions.** In Cursor, `@`-mention attaches the
+  file body to the LLM context *before* Kakashi runs, defeating the
+  privacy goal. If the user already used `@<file>`, say so honestly, run
+  the mask so downstream shares are safe, and ask for a path string next
+  time.
+- **Agent-safe by default.** `scan`, `scan-dir`, `db-scan` are counts-only.
+  Never pass `--verbose`. Never invoke `audit`, `db-audit`, or
+  `scan-dir --include-values` in an agent-visible turn unless the user
+  explicitly opted in knowing it prints plaintext into the conversation.
+- **Confirm before `mask-dir`** on more than a few hundred files.
+- **Never echo a live database URL** into chat. Prefer
+  `$DATABASE_URL` / `%DATABASE_URL%` / `mock:customers` for demos.
+- **agent-guard binds `127.0.0.1` only.** Do not route around that with a
+  tunnel or reverse proxy.
+
+## Slash commands installed in this session
+
+If the user prefers explicit commands, they can type any of these — each
+maps to its dedicated command file:
+
+| User types | Runs |
 | --- | --- |
-| `/kakashi-scan <file>` | `kakashi scan "<file>"` |
-| `/kakashi-mask <file>` | `kakashi mask "<file>"` |
-| `/kakashi-audit <file>` | `kakashi audit "<file>"` — local human terminal only |
-| `/kakashi-stats` | `kakashi stats` |
-| `/kakashi-list` | `kakashi list-patterns` |
+| `/kakashi` | Smart orchestrator (this rule, made explicit) |
+| `/kakashi-scan <path>` | `kakashi scan <path>` |
+| `/kakashi-mask <path>` | `kakashi mask <path>` |
+| `/kakashi-scan-dir <dir>` | `kakashi scan-dir <dir> -f html -o kakashi-report.html` |
+| `/kakashi-mask-dir <dir>` | `kakashi mask-dir <dir> -r` (with confirmation) |
+| `/kakashi-guard <path> <intent>` | `kakashi guard <path> --agent ... --task ... --destination ... --json` |
+| `/kakashi-db-scan <conn> -q <query>` | `kakashi db-scan <conn> -q <query> --limit 1000` |
+| `/kakashi-db-mask <conn> -q <query>` | `kakashi db-mask <conn> -q <query> -f csv -o masked_query.csv --limit 1000` |
+| `/kakashi-db-audit <conn> -q <query>` | `kakashi db-audit ...` (human-only; WARN first) |
+| `/kakashi-agent-guard <dir>` | `kakashi agent-guard --watch <dir> --port 8797` |
+| `/kakashi-audit <path>` | `kakashi audit <path>` (human-only; WARN first) |
+| `/kakashi-stats` / `/kakashi-list` / `/kakashi-impact` | Evidence commands |
 
 If `kakashi` is not on PATH, fall back to
 `npx -y @muhammadatef/kakashi <subcommand> ...`.
 
-## Protection Workflows
+## Exit codes (quick reference)
 
-### One file
+- `scan`, `scan-dir`, `db-scan` — `0` clean, `1` findings present, `2` error.
+- `mask`, `mask-dir`, `db-mask` — `0` success, `2` error.
+- `guard` — `0` ALLOW / ALLOW_WITH_TRANSFORMATION, `3` REQUIRE_APPROVAL,
+  `4` BLOCK, `2` error.
 
-```bash
-kakashi scan report.xlsx
-kakashi mask report.xlsx                 # writes masked_report.xlsx
-kakashi scan masked_report.xlsx          # verify before release
-```
+Exit `1` from a scan is a **detection result**, not a crash. It is what the
+CI matrix wants when a PR introduces a leak.
 
-Mask modes are `typed` (stable labels), `redact` (irreversible removal), and
-`fake` (realistic substitutes). Prefer `typed` for agent analysis because it
-preserves relationships without preserving original values.
+## Privacy boundary
 
-### A folder or repository
-
-```bash
-kakashi scan-dir ./project -f html -o kakashi-report.html
-kakashi mask-dir ./project -r
-```
-
-`scan-dir` honours `.gitignore` and `.kakashiignore`, emits PDPL-mapped JSON,
-HTML, Markdown, or text reports, and is safe by default because matched values
-are excluded. Never add `--include-values` when an agent can read the report.
-Confirm with the user before `mask-dir` on a large batch.
-
-### Database query results
-
-```bash
-kakashi db-scan "$DATABASE_URL" -q "SELECT * FROM customers" --limit 1000
-kakashi db-mask "$DATABASE_URL" -q "SELECT * FROM customers" \
-  -f jsonl -o masked_customers.jsonl --limit 1000
-```
-
-Supported adapters are PostgreSQL, MySQL, MongoDB, Snowflake, Databricks, and
-SQLite. Rows are masked locally before the safe copy is written. Keep database
-credentials in environment variables; never echo a connection string into
-chat. `db-audit` deliberately prints original values and is restricted to a
-local human terminal.
-
-### Guardian — autonomous release decision
-
-```bash
-kakashi guard employees.csv \
-  --agent codex \
-  --task "calculate average salary by department" \
-  --destination external_model \
-  --json
-```
-
-Guardian observes the resource, interprets the task, assesses risk, plans the
-minimum necessary transformation, validates policy, acts, re-scans its output,
-and replans or fails closed. Honour its decision:
-
-- `ALLOW` / `ALLOW_WITH_TRANSFORMATION` (exit `0`): use only `releasePath`.
-- `REQUIRE_APPROVAL` (exit `3`): stop and request explicit human approval.
-- `BLOCK` (exit `4`): do not release the resource.
-- Exit `2`: operational error; fail closed.
-
-Never substitute the original path when Guardian returns a transformed
-`releasePath`. Approvals must come from a human; an agent must not self-approve.
-
-### Long-running agent integration
-
-```bash
-kakashi agent-guard --watch ./workspace --port 8797 --auto-mask
-```
-
-The sidecar binds to loopback only and exposes `/health`, `/scan`, and `/mask`
-for local tools. It makes no outbound network calls. Use it when an IDE, MCP
-tool, or automation needs a standing privacy gate rather than a one-off check.
-
-## Output Safety and Exit Codes
-
-- `scan`, `db-scan`, and `scan-dir` return exit `1` when findings exist. This is
-  a detection result, not a crash. Exit `0` means clean; exit `2` means error.
-- `scan` and `db-scan` are count-only by default. Do not use `--verbose` in an
-  agent-visible terminal.
-- `audit`, `db-audit`, and `scan-dir --include-values` intentionally reveal raw
-  matches. Use them only in a local human-only review.
-- Kakashi never overwrites a file by default. Masked files use a `masked_`
-  prefix; Guardian artifacts use a `guarded_` prefix.
-- `kakashi impact --write impact.json` creates a value-free impact snapshot;
-  `kakashi list-patterns` shows the active detector catalog.
-
-## Sensitive Data Categories
-
-ID & Documents: national IDs, passports, visas, trade licenses, P.O. boxes
-
-Personal Info: emails, phones, IPs, dates of birth, cards, names, ages, IBANs
-
-Secrets & authentication: API keys, JWTs, database connection strings, `.env` data, SSH
-keys, bearer tokens, and high-entropy secrets
-
-## File Formats Supported
-
-Documents: `.pdf` `.docx` `.pptx` `.xlsx` `.xls` `.csv`
-
-Data: `.json` `.jsonl` `.json5` `.yaml` `.yml` `.toml` `.xml` `.md`
-
-Code: 40+ extensions including `.py` `.ts` `.js` `.go` `.java` `.rs` `.c`
-`.sql` `.env` `.tf` `.sh` `.html` and `.vue`
-
-## Privacy Boundary
-
-- Detection, masking, reporting, database row processing, and Guardian
-  reasoning run locally.
-- Kakashi makes zero outbound network calls and does not submit telemetry.
-- Treat the tool as a preventive control, not a legal-compliance guarantee.
+- All detection, masking, database processing, and Guardian reasoning is
+  local. Zero outbound network calls during scan / mask / guard.
+- Kakashi never overwrites originals: masks use `masked_`, Guardian uses
+  `guarded_`.
+- Kakashi is a **preventive control**, not a legal-compliance guarantee.
+  For UAE deployments, the PDPL-mapped compliance report (`scan-dir -f html`)
+  is intended for a Data Protection Officer's review, not as a substitute
+  for one.

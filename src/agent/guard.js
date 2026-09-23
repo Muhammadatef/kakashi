@@ -124,15 +124,31 @@ async function start(options) {
     if (onEvent) onEvent(event);
   }
 
-  // ---- Passive fs watcher ---------------------------------------------------
-  // fs.watch is best-effort across platforms; on Linux it uses inotify which
-  // reliably reports change events for files in the watched directory. We use
-  // recursive:true where supported (macOS/Windows); on Linux we fall back to
-  // non-recursive top-level watching to avoid noisy per-file watchers.
-  const watcher = fs.watch(watch, { recursive: process.platform !== 'linux' }, async (eventType, filename) => {
+  // ---- Passive scanner ------------------------------------------------------
+  //
+  // fs.watch is best-effort across platforms:
+  //   Linux   → inotify, reliable but non-recursive so we watch only the top level
+  //   macOS   → FSEvents via recursive:true, reliable
+  //   Windows → ReadDirectoryChangesW; on network drives, mapped drives (G:), or
+  //             certain sandboxed paths it throws `UNKNOWN: unknown error, watch`
+  //             and the daemon dies before ever answering /health. Users then
+  //             believe the whole tool is broken when in fact the HTTP API is
+  //             fine — the watcher just cannot start on that specific path.
+  //
+  // Strategy: try fs.watch first. If it throws synchronously (Windows UNKNOWN,
+  // EPERM on network shares, ENOSPC on inotify-exhausted Linux), fall back to a
+  // low-frequency polling scan so the HTTP surface keeps working. If polling is
+  // undesirable too (KAKASHI_GUARD_NO_WATCH=1), skip passive scanning entirely
+  // and rely solely on the loopback API.
+  const NO_WATCH_ENV = process.env.KAKASHI_GUARD_NO_WATCH === '1';
+  const POLL_INTERVAL_MS = Number(process.env.KAKASHI_GUARD_POLL_MS || 5000);
+  let watcher = { close: () => {} };
+  let poller = null;
+  let watchMode = 'off';
+
+  async function onChangeCandidate(filename) {
     if (!filename) return;
-    const full = path.join(watch, filename);
-    // Debounce
+    const full = path.isAbsolute(filename) ? filename : path.join(watch, filename);
     const now = Date.now();
     const last = state.lastScanAt.get(full) || 0;
     if (now - last < DEFAULTS.scanCooldownMs) return;
@@ -156,7 +172,73 @@ async function start(options) {
     } catch (err) {
       emit({ kind: 'scan_error', path: filename, error: err.message });
     }
-  });
+  }
+
+  if (NO_WATCH_ENV) {
+    emit({ kind: 'watch_disabled', reason: 'KAKASHI_GUARD_NO_WATCH' });
+  } else {
+    try {
+      watcher = fs.watch(watch, { recursive: process.platform !== 'linux' }, (_evt, filename) => {
+        onChangeCandidate(filename);
+      });
+      // Some Windows failures come as an emitted 'error' rather than a throw.
+      watcher.on('error', (err) => {
+        emit({ kind: 'watch_failed', platform: process.platform, error: err.message });
+        try { watcher.close(); } catch { /* already closed */ }
+        watchMode = 'poll';
+        poller = startPolling();
+      });
+      watchMode = 'watch';
+    } catch (err) {
+      // Synchronous throw (UNKNOWN on Windows / EPERM on network share / etc.).
+      // Degrade to polling; keep the HTTP API alive.
+      emit({ kind: 'watch_failed', platform: process.platform, error: err.message });
+      watchMode = 'poll';
+      poller = startPolling();
+    }
+  }
+
+  /**
+   * Poor-man's watcher: every POLL_INTERVAL_MS, list the directory and diff
+   * modification times against the last snapshot. Detects new + modified files;
+   * respects the same debounce as fs.watch, so an rapid save loop doesn't
+   * hammer the scanner.
+   */
+  function startPolling() {
+    const known = new Map(); // path → mtimeMs
+    const tick = async () => {
+      let entries;
+      try {
+        entries = fs.readdirSync(watch, { withFileTypes: true });
+      } catch (err) {
+        emit({ kind: 'poll_error', error: err.message });
+        return;
+      }
+      for (const e of entries) {
+        if (!e.isFile()) continue;
+        const full = path.join(watch, e.name);
+        let mtime;
+        try {
+          mtime = fs.statSync(full).mtimeMs;
+        } catch { continue; }
+        if (known.get(full) !== mtime) {
+          known.set(full, mtime);
+          onChangeCandidate(e.name);
+        }
+      }
+    };
+    // Seed the snapshot on start so we don't fire a "changed" event for every
+    // pre-existing file the first time round.
+    try {
+      for (const e of fs.readdirSync(watch, { withFileTypes: true })) {
+        if (e.isFile()) {
+          try { known.set(path.join(watch, e.name), fs.statSync(path.join(watch, e.name)).mtimeMs); }
+          catch { /* skip */ }
+        }
+      }
+    } catch { /* readdir failed; the poller will report on next tick */ }
+    return setInterval(tick, POLL_INTERVAL_MS);
+  }
 
   // ---- HTTP API (loopback only) --------------------------------------------
   const server = http.createServer(async (req, res) => {
@@ -178,6 +260,10 @@ async function start(options) {
         uptimeMs: Date.now() - state.startedAt,
         filesScanned: state.files,
         totalFindings: state.findings,
+        // `watchMode` reveals whether the OS-level watcher survived startup or
+        // we degraded to polling. Useful for the Windows UNKNOWN case where
+        // the daemon looked dead but is actually serving on loopback.
+        watchMode,
         version,
       }));
       return;
@@ -236,7 +322,11 @@ async function start(options) {
   });
 
   function stop() {
-    watcher.close();
+    // Best-effort teardown: any of these may already have been closed by an
+    // earlier error path, so guard each with try/catch. The point of stop() is
+    // to leave nothing running, not to prove nothing was running.
+    try { watcher.close(); } catch { /* already closed */ }
+    if (poller) { try { clearInterval(poller); } catch { /* already cleared */ } }
     return new Promise((resolve) => server.close(() => resolve()));
   }
 

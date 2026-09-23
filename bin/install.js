@@ -75,13 +75,28 @@ ${body}
 
 let opts = {};
 
+// Every slash command that ships in commands/ AND is safe to expose in the
+// agent's `/` picker. Adding to this list is a two-step contract:
+//   1. Ship the matching `commands/<name>.md` file (or `copySlashCommands`
+//      silently skips it).
+//   2. Add the id here. `tests/agent-rules.test.js` and
+//      `tests/orchestrator.test.js` assert both lists stay in sync.
+// The order below matches the order they should appear in the `/` picker.
 const SLASH_CMDS = [
-  'kakashi',
-  'kakashi-scan',
-  'kakashi-mask',
-  'kakashi-audit',
-  'kakashi-stats',
-  'kakashi-list',
+  'kakashi',              // smart orchestrator (picks the right tool from intent)
+  'kakashi-scan',         // one file, counts
+  'kakashi-mask',         // one file, writes masked_<name>
+  'kakashi-scan-dir',     // folder / PDPL report (HTML | JSON | MD)
+  'kakashi-mask-dir',     // batch mask (confirms on large trees)
+  'kakashi-guard',        // release decision (Guardian; agent-safe --json)
+  'kakashi-db-scan',      // DB query results, counts only
+  'kakashi-db-mask',      // DB query results, safe local copy
+  'kakashi-db-audit',     // DB query results, human-only (WARN in agent)
+  'kakashi-audit',        // one file, human-only (WARN in agent)
+  'kakashi-agent-guard',  // loopback HTTP sidecar for MCP-enabled clients
+  'kakashi-stats',        // cumulative counters
+  'kakashi-list',         // active detection patterns
+  'kakashi-impact',       // value-free adoption snapshot
 ];
 
 function copySlashCommands(targetDir) {
@@ -99,7 +114,7 @@ function installClaude() {
   appendMarkerBlock(path.join(configDir, 'CLAUDE.md'), block);
   copySlashCommands(path.join(configDir, 'commands'));
   writeFile(path.join(configDir, 'kakashi-active'), 'full');
-  console.log('  [ok] Claude Code  (rule + 6 slash commands)');
+  console.log(`  [ok] Claude Code  (rule + ${SLASH_CMDS.length} slash commands)`);
 }
 
 function installCursor() {
@@ -111,7 +126,7 @@ function installCursor() {
     writeFile(path.join(process.cwd(), '.cursor', 'rules', 'kakashi.mdc'), rule);
     copySlashCommands(path.join(process.cwd(), '.cursor', 'commands'));
   }
-  console.log('  [ok] Cursor  (rule + 6 slash commands)');
+  console.log(`  [ok] Cursor  (rule + ${SLASH_CMDS.length} slash commands)`);
 }
 
 function installCodex() {
@@ -124,7 +139,7 @@ function installCodex() {
     appendMarkerBlock(path.join(process.cwd(), 'AGENTS.md'), block);
     copySlashCommands(path.join(process.cwd(), '.codex', 'commands'));
   }
-  console.log('  [ok] Codex CLI  (rule + 6 slash commands)');
+  console.log(`  [ok] Codex CLI  (rule + ${SLASH_CMDS.length} slash commands)`);
 }
 
 function installWindsurf() {
@@ -139,7 +154,7 @@ function installWindsurf() {
     writeFile(path.join(process.cwd(), '.windsurf', 'rules', 'kakashi.md'), rule);
     copySlashCommands(path.join(process.cwd(), '.windsurf', 'commands'));
   }
-  console.log('  [ok] Windsurf  (rule + 6 slash commands)');
+  console.log(`  [ok] Windsurf  (rule + ${SLASH_CMDS.length} slash commands)`);
 }
 
 function installCline() {

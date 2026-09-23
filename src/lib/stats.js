@@ -2,6 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Read the version from package.json once at load time. Hardcoding it here
+// silently drifts when a release bumps the version and forgets to update this
+// file — which is exactly what happened between 1.1.0 and 1.2.0. A `require`
+// on package.json is cheap, works from a global npm install (npm resolves it
+// relative to the module file), and cannot get out of sync.
+const { version: PKG_VERSION } = require('../../package.json');
+
 const STATS_DIR = path.join(os.homedir(), '.kakashi');
 const STATS_FILE = path.join(STATS_DIR, 'stats.json');
 
@@ -65,7 +72,7 @@ function impactSnapshot() {
     filesMasked: stats.filesMasked || 0,
     totalFindings: stats.totalFindings || 0,
     byCategory: stats.byCategory || { id: 0, pii: 0, cred: 0 },
-    kakashiVersion: '1.1.0',
+    kakashiVersion: PKG_VERSION,
     platform: process.platform, // linux | darwin | win32
     // NOTE: no filenames, no paths, no directory names, no pattern-instance
     // counts (only category totals). No user id, no machine id.

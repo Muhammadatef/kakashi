@@ -67,6 +67,27 @@ function header(result, context) {
   return lines.join('\n');
 }
 
+/**
+ * THINK -- restate the ask in one line, in the order the reader thinks about
+ * it (who is asking, for what, to send where). The rest of the transcript
+ * only makes sense once this line is on the page. Emitted right after the
+ * header for parity with the loop diagram used in changes_23Sept.md.
+ */
+function thinkSection(result, context) {
+  const lines = [];
+  lines.push(chalk.white('THINK'));
+  const agent = context.requestingAgent.name;
+  const dest = context.destination.label;
+  const purpose = context.task
+    ? `for "${context.task}"`
+    : chalk.yellow('with no stated task — protection will be stricter, never weaker');
+  lines.push(chalk.gray(`   ${agent} wants to release `)
+    + result.observation.resourceName
+    + chalk.gray(' to ') + dest + chalk.gray(' ') + purpose + chalk.gray('.'));
+  lines.push('');
+  return lines.join('\n');
+}
+
 function observeSection(observation) {
   const lines = [];
   lines.push(chalk.white('OBSERVE'));
@@ -187,17 +208,43 @@ function verifySection(v, total) {
 }
 
 /**
- * Interleave each iteration's plan with the verification that judged it, so the
- * transcript reads in the order the events actually happened rather than showing
- * a final plan above the failure that produced it.
+ * ACT -- what was actually written to disk (or wasn't, when we failed closed).
+ * Sourced from the execution result, not re-derived from the plan, so the line
+ * reflects what really happened rather than what the planner intended.
+ */
+function actSection(execResult, iteration, total) {
+  const lines = [];
+  lines.push(chalk.white(total > 1 ? `ACT — attempt #${iteration}` : 'ACT'));
+  if (!execResult) {
+    lines.push(chalk.red('   Nothing written -- Guardian failed closed before execution.'));
+    lines.push('');
+    return lines.join('\n');
+  }
+  const rc = execResult.replacementCount || 0;
+  const byClass = execResult.byClass && Object.keys(execResult.byClass).length
+    ? '   (' + Object.entries(execResult.byClass).map(([c, n]) => `${c} x${n}`).join(', ') + ')'
+    : '';
+  lines.push(chalk.gray(`   Wrote scratch artifact with ${rc} replacement(s).${byClass}`));
+  lines.push(chalk.gray('   The artifact is not promoted to the output path until VERIFY passes.'));
+  lines.push('');
+  return lines.join('\n');
+}
+
+/**
+ * Interleave each iteration's plan with the act that carried it out and the
+ * verification that judged the outcome, so the transcript reads in the exact
+ * order the events actually happened. Mirrors the loop diagram in
+ * changes_23Sept.md: THINK -> OBSERVE -> ASSESS -> PLAN -> ACT -> VERIFY -> REACT.
  */
 function iterationSections(result) {
   const plans = (result.state && result.state.authorizedPlans) || [];
+  const execs = (result.state && result.state.toolResults) || [];
   const verifications = result.verifications || [];
-  const total = Math.max(plans.length, verifications.length);
+  const total = Math.max(plans.length, execs.length, verifications.length);
   const out = [];
   for (let i = 0; i < total; i++) {
     if (plans[i]) out.push(planSection(plans[i].toJSON(), i + 1, total));
+    if (execs[i]) out.push(actSection(execs[i], i + 1, total));
     if (verifications[i]) out.push(verifySection(verifications[i], total));
   }
   return out;
@@ -206,7 +253,10 @@ function iterationSections(result) {
 function decisionSection(result) {
   const style = DECISION_STYLE[result.decision];
   const lines = [];
-  lines.push(chalk.white('DECISION'));
+  // Header reads REACT per the loop diagram in changes_23Sept.md ("what the
+  // Guardian did with the verification result"), with the terminal decision
+  // label immediately underneath so downstream consumers can still grep on it.
+  lines.push(chalk.white('REACT'));
   lines.push('   ' + style.color.bold(style.label));
   const why = DECISION_EXPLANATION[result.reasonCode] || result.reasonCode;
   lines.push(chalk.gray(`   ${why}`));
@@ -247,6 +297,10 @@ function decisionSection(result) {
  */
 function renderRun(result, context) {
   const parts = [header(result, context)];
+  // THINK -> OBSERVE -> ASSESS -> PLAN -> ACT -> VERIFY -> REACT, in that order.
+  // The section functions below produce the labels; the caller (this function)
+  // is what fixes their order on the page.
+  if (result.observation) parts.push(thinkSection(result, context));
   if (result.observation) parts.push(observeSection(result.observation));
   if (context.taskAnalysis) parts.push(taskSection(context.taskAnalysis, result.observation));
   if (result.risk) parts.push(assessSection(result.risk));
@@ -262,4 +316,15 @@ function renderRun(result, context) {
   return parts.join('\n');
 }
 
-module.exports = { renderRun, taskSection, DECISION_STYLE, TOOL_VERB, REASON_TEXT, NEED_TEXT };
+module.exports = {
+  renderRun,
+  // Individual sections exported so tests (and any future streaming renderer)
+  // can assert on the exact stage labels the plan mandates.
+  thinkSection,
+  taskSection,
+  actSection,
+  DECISION_STYLE,
+  TOOL_VERB,
+  REASON_TEXT,
+  NEED_TEXT,
+};

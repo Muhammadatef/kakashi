@@ -12,6 +12,11 @@ const { runGuardTests } = require('./guard.test');
 const { runGuardianTests } = require('./guardian.test');
 const { runTaskTests } = require('./task.test');
 const { runAgentRuleTests } = require('./agent-rules.test');
+const { runCursorDemoTests } = require('./cursor-demo.test');
+const { runOrchestratorTests } = require('./orchestrator.test');
+const { runGuardianNarrativeTests } = require('./guardian-narrative.test');
+const { runGuardFallbackTests } = require('./guard-fallback.test');
+const { runImpactTests } = require('./impact.test');
 
 (async () => {
   let ok = true;
@@ -29,6 +34,12 @@ const { runAgentRuleTests } = require('./agent-rules.test');
   ok = (await runGuardianTests()) && ok;
   ok = (await runTaskTests()) && ok;
   ok = runAgentRuleTests() && ok;
+  ok = runCursorDemoTests() && ok;
+  // v1.2+ additions from changes_23Sept.md:
+  ok = runOrchestratorTests() && ok;
+  ok = (await runGuardianNarrativeTests()) && ok;
+  ok = (await runGuardFallbackTests()) && ok;
+  ok = runImpactTests() && ok;
 
   console.log(ok ? '\nAll tests passed.' : '\nSome tests failed.');
   process.exit(ok ? 0 : 1);

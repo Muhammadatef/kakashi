@@ -1,38 +1,128 @@
 ---
-description: Activate Kakashi privacy mode -- scan and mask before sharing files
+description: Activate Kakashi and let it pick the right tool for what the user asked -- scan / scan-dir / mask / mask-dir / guard / db-* / agent-guard
 ---
 
 You are now in Kakashi privacy mode for this session.
 
-From this point on, before sharing, pasting, uploading, or sending ANY file
-content to an external service, LLM API, or user outside this session:
+`/kakashi` used alone (or with a sentence, a path, a folder, a DB hint, or an
+intent) means: **choose the correct Kakashi tool from that intent and run it,
+narrating each step.** The user must never need to know that
+`/kakashi-scan-dir` or `/kakashi-guard` exist. If they typed a specific
+`/kakashi-<subcommand>`, use its dedicated command file instead.
 
-1. Run `kakashi scan <path>` first.
-2. If findings > 0, run `kakashi mask <path>` and use `masked_<file>` instead.
-3. Never paste raw file contents that contain credentials, IDs, passports,
-   emails, phone numbers, or personal records.
+---
 
-If `kakashi` is not on PATH, use `npx -y @muhammadatef/kakashi` instead.
+## The dispatch table -- pick one path per turn
 
-## Important -- agent-safe invocation
+Read what the user said. Match it against these rows top-to-bottom; use the
+first row that fits.
 
-When the user invokes a Kakashi slash command, **prefer a path string over an
-`@`-mention**. In Cursor, an `@`-mention attaches the file body to the LLM
-context *before* Kakashi runs, which defeats the privacy goal.
+| The user says or implies... | Run this Kakashi flow | Why |
+| --- | --- | --- |
+| "may I send / release / share / paste this file to / into an external model / another agent?" or gives an agent + task + destination | **`guard`** → narrate THINK/OBSERVE/ASSESS/PLAN/ACT/VERIFY/REACT; honour exit 0/3/4 | The question is a release decision. Only Guardian authorises releases. |
+| "is this file safe?" / "check this file" / "scan this file" + one file path | **`scan`** on that file; if findings > 0, offer `mask` or (if destination is stated) `guard` | Single-file privacy check. |
+| "mask / redact / anonymise this file" | **`scan`** → then **`mask`** the file → then re-scan the masked sibling | Two-step so the user sees the finding profile before the write. |
+| "check / scan / audit this folder / repo / project / directory / drive" | **`scan-dir`** with `-f html -o kakashi-report.html`; offer JSON with `-f json` for CI | Estate-level compliance report. |
+| "compliance report" / "PDPL report" / "estate scan" / "audit this codebase" | **`scan-dir`** with `-f html`; mention PDPL article citations in the summary | Same as above; frame the output as regulatory evidence. |
+| "mask everything in this folder" / "batch mask" + a directory | Confirm size first → then **`mask-dir <dir> -r`** | Destructive-adjacent (many new files). Never skip the confirmation. |
+| "run a query and mask" / "get rows from Postgres/MySQL/Mongo/Snowflake/Databricks/SQLite" / "check this database query" | **`db-scan`** first (counts) → then **`db-mask`** to write a safe local copy | Rows never enter agent context. Source DB is read-only. |
+| "start a watch / sidecar / daemon" / "watch this folder while I work" / "I want an HTTP endpoint any agent can call" | **`agent-guard --watch <dir> --port 8797`** on loopback; describe `/health`, `/scan`, `/mask` | The IDE sidecar mode. Never binds anything but 127.0.0.1. |
+| "what does Kakashi detect?" / "which patterns are active?" | **`list-patterns`** | Read-only capability discovery. |
+| "how much has Kakashi caught?" / "impact snapshot" / "cumulative stats" | **`impact`** (with `--write` if they want a file) | Value-free adoption metric. |
+| "session stats" / "how many files today?" | **`stats`** | Local counters. |
+| "walk me through / prove it / show me the mapping" (explicit, single file, human present) | **`audit`** — but WARN first that this echoes plaintext into the agent context | Deliberately verbose. Only when explicitly asked. |
+| "walk me through the DB / prove it / show me the row mapping" (explicit) | **`db-audit`** — same warning as `audit` | Human-only. |
 
-If the user has already used `@<file>` in their message, you MUST:
-1. Note this back to the user: "I see the file body was already attached via
-   `@`-mention; the secrets are already in this conversation's context."
-2. Still run `kakashi mask` so they can share the masked version downstream.
-3. Recommend they invoke Kakashi via path string next time, e.g.:
-   `/kakashi-mask /path/to/file.env`
+If none of the rows fit, ask **one** short question:
+> "Are you asking me to check a file, scan a folder, mask a database query,
+> or decide whether a specific file may be released to an agent?"
 
-## Slash commands available in this session
+Then re-dispatch from the answer. Do not guess.
 
-- `/kakashi-scan <path>`   -- counts only, no secret previews (agent-safe by default)
-- `/kakashi-mask <path>`   -- write masked_<file> alongside the original
-- `/kakashi-audit <path>`  -- full original -> replacement mapping (DELIBERATELY exposes secrets)
-- `/kakashi-stats`         -- cumulative session stats
-- `/kakashi-list`          -- show every active detection pattern
+---
 
-Acknowledge: "Kakashi privacy mode active. I'll scan files before sharing."
+## Narrate every step
+
+The user must see what you decided and why. Before you run the shell command,
+say (one short sentence each):
+
+- **CHOSE** — which Kakashi command you picked from the dispatch table.
+- **WHY** — the row in the table that matched what they said.
+
+After the command runs, report:
+
+- What the exit code means (0 clean, 1 findings, 2 error, 3 approval, 4 block).
+- The category / severity / PDPL summary.
+- The next step you recommend (if any) — but do not run it without asking
+  unless the initial request already implied it (e.g. "scan then mask this
+  file" is a single implied chain; "scan this folder" is not).
+
+Never dump raw shell output silently. Never open a source file yourself to
+"see what's inside" — that defeats the point.
+
+---
+
+## Chain rules
+
+- **Scan → Mask → Re-scan.** When the user says "mask this file", always run
+  `scan` first (so they see what will be replaced), then `mask`, then re-scan
+  the `masked_*` sibling to prove the output is clean.
+- **Scan → Guard.** When the user asks about sending a file to a specific
+  destination (external model, another agent, a human outside the session),
+  do not stop at `scan`. Escalate to `guard --json` with the stated agent and
+  task; honour the JSON decision.
+- **db-scan → db-mask.** For a "safe local copy of these rows", first `db-scan`
+  to show counts, then `db-mask` to write the CSV / JSONL. Do not run `db-mask`
+  as the first step — the user should see the finding profile first.
+- **scan-dir → guard (per file).** When a directory scan flags a specific
+  file the user then wants to share, escalate that one file to Guardian
+  rather than mass-masking the tree.
+
+---
+
+## Agent-safe defaults you must not weaken
+
+- **Path strings, not `@`-mentions.** If the user typed `/kakashi @file.env`,
+  say honestly: "I see the file body was already attached via `@`-mention;
+  the secrets are already in this conversation's context. I'll still mask it
+  so downstream shares are safe, but next time please pass the path:
+  `/kakashi /path/to/file.env`." Then run the flow.
+- **Never `--verbose`, never `audit`, never `db-audit`, never
+  `--include-values`** in an agent-visible turn unless the user explicitly
+  asked for that verbose output knowing it echoes plaintext into the
+  conversation.
+- **Never invent an approval.** If Guardian returns `REQUIRE_APPROVAL`
+  (exit 3), stop and ask the human. Do not run a "smaller" mask instead.
+  Do not offer a workaround.
+- **Never bind agent-guard to a public interface.** It refuses non-loopback
+  origins with 403; do not try to route around it with a tunnel.
+- **Confirm before `mask-dir` on a large tree.** Ask for the file count first.
+- **Never echo a live DB URL** into chat. Prefer `$DATABASE_URL` /
+  `%DATABASE_URL%` / `mock:customers` for demos.
+
+---
+
+## Fall-back invocation
+
+If `kakashi` is not on PATH, every command becomes
+`npx -y @muhammadatef/kakashi <subcommand> ...`. On Windows, if
+`Start-Process kakashi` fails (the npm shim isn't a native exe), use
+`kakashi.cmd` or
+`node "$(npm root -g)\@muhammadatef\kakashi\bin\kakashi.js" <args>`.
+
+---
+
+## Related dedicated command files
+
+Anything more specific — the user typed the full slash — goes to that file:
+
+- `/kakashi-scan`, `/kakashi-mask`, `/kakashi-audit` (single file)
+- `/kakashi-scan-dir`, `/kakashi-mask-dir` (directory)
+- `/kakashi-guard` (release decision)
+- `/kakashi-db-scan`, `/kakashi-db-mask`, `/kakashi-db-audit` (database)
+- `/kakashi-agent-guard` (loopback sidecar)
+- `/kakashi-stats`, `/kakashi-list`, `/kakashi-impact` (evidence)
+
+Acknowledge on activation:
+> "Kakashi privacy mode active. Tell me what you want to check, mask,
+> report on, or release — I'll pick the right tool and show you each step."
