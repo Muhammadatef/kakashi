@@ -6,6 +6,71 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.3.1] — 2026-09-23
+
+**Bug-fix release.** Closes the "`Unrecognized command '/Kakashi'`" gap on
+Codex CLI (and, by extension, every agent that lacks a native slash-command
+mechanism), and gives users a proper features brief the first time they
+invoke Kakashi in any agent.
+
+### Fixed
+
+- **`/kakashi` (any case) now works in Codex CLI, GitHub Copilot, and
+  Continue** — agents that do NOT read `~/.<agent>/commands/*.md` as
+  user-invokable slash commands. The system-prompt rules
+  ([AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md),
+  [src/rules/kakashi-activate.md](src/rules/kakashi-activate.md)) now
+  explicitly teach the LLM to recognise `kakashi`, `Kakashi`, `KAKASHI`,
+  `/kakashi`, `/Kakashi`, `/KAKASHI`, `use kakashi`, `run kakashi`,
+  `activate kakashi` — with or without the leading slash, in any case —
+  and to dispatch normally. When the agent runtime replies
+  `Unrecognized command '/Kakashi'`, the LLM has been taught this is the
+  *start* of the interaction, not the end: the user's next plain-language
+  kakashi mention is the real trigger.
+- **Root `AGENTS.md` and `CLAUDE.md` now carry the full v1.3 orchestrator
+  content.** Before this release those files still listed only 5 slash
+  commands (`scan`/`mask`/`audit`/`stats`/`list`) and never mentioned
+  `guard`, `scan-dir`, `db-*`, `agent-guard`, or `impact` — a Codex CLI
+  user reading `~/.codex/AGENTS.md` saw pre-v1.3 content while a Cursor
+  user with `~/.cursor/commands/*.md` saw the full 14. Now both surfaces
+  are identical.
+- **`package-lock.json` drift.** v1.3.0 shipped with the lockfile still
+  pinned at 1.2.0 (bumped only via `chore(release)` on package.json, not
+  via `npm version`). `tests/cli.test.js` caught this on the next run;
+  v1.3.1 uses `npm version 1.3.1` which updates both files atomically.
+
+### Added
+
+- **Kakashi features brief.** Every rule file now opens with a short
+  brief that shows the user what Kakashi is and what it can do for them
+  in this session — displayed automatically when the user types the
+  trigger with no additional intent (`/kakashi`, `kakashi`, `use kakashi`,
+  etc). The brief lists the four capabilities (Check / Mask / Guardian /
+  Standing sidecar), the coverage (35+ patterns, 50+ formats, 6 DB
+  drivers), and offers 4-5 example prompts the user can send next.
+- **Case-insensitive trigger contract** documented in all four rule files
+  (`commands/kakashi.md`, `src/rules/kakashi-activate.md`, `AGENTS.md`,
+  `CLAUDE.md`). Named specifically so the LLM does not require the exact
+  lowercase spelling before recognising the orchestrator invocation.
+- **Test-enforced parity across the four rule files.**
+  [tests/orchestrator.test.js](tests/orchestrator.test.js) grew from 29
+  assertions to 48 — including per-file assertions for the brief markers,
+  the case-insensitive trigger markers, the "no slash-command mechanism"
+  fallback (naming Codex CLI + the `Unrecognized` error explicitly), the
+  full v1.3 slash-command catalogue in AGENTS.md + CLAUDE.md, and a
+  byte-identical invariant between AGENTS.md and CLAUDE.md (the installer
+  uses whichever exists via `loadActivateBlock`, so drift would silently
+  fork Claude Code and Codex CLI onto different rules).
+
+### Not changed
+
+- No functional behaviour of any Kakashi subcommand.
+- No changes to the Guardian loop, the pattern engine, the six DB drivers,
+  or the installer matrix beyond the version bump.
+- Fully backward-compatible with v1.3.0 tokens and workflows.
+
+---
+
 ## [1.3.0] — 2026-09-23
 
 The **orchestrator release**. Typing `/kakashi` (with or without a sentence

@@ -27,6 +27,15 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const ORCH_CMD = path.join(ROOT, 'commands', 'kakashi.md');
 const ORCH_RULE = path.join(ROOT, 'src', 'rules', 'kakashi-activate.md');
+// v1.3.1: root AGENTS.md and CLAUDE.md ARE the system-prompt that Codex CLI
+// (via ~/.codex/AGENTS.md) and GitHub Copilot (via
+// .github/copilot-instructions.md) read. If they drift from the always-on
+// rule, the Codex user gets a stale surface -- which is exactly the bug
+// where /Kakashi returned "Unrecognized command" because the AGENTS.md the
+// user's Codex was loading never mentioned the v1.3 orchestrator or the
+// case-insensitive trigger contract.
+const ROOT_AGENTS = path.join(ROOT, 'AGENTS.md');
+const ROOT_CLAUDE = path.join(ROOT, 'CLAUDE.md');
 
 function runOrchestratorTests() {
   let passed = 0;
@@ -44,6 +53,20 @@ function runOrchestratorTests() {
 
   const orchCmd = fs.readFileSync(ORCH_CMD, 'utf8');
   const orchRule = fs.readFileSync(ORCH_RULE, 'utf8');
+  const rootAgents = fs.readFileSync(ROOT_AGENTS, 'utf8');
+  const rootClaude = fs.readFileSync(ROOT_CLAUDE, 'utf8');
+
+  // The FOUR files that together define how every supported agent sees the
+  // orchestrator. Any drift between them is exactly the class of bug the
+  // v1.3.1 fix targets.
+  //
+  // Each entry: [label used in test names, body of the file].
+  const ALL_RULE_FILES = [
+    ['commands/kakashi.md',            orchCmd],
+    ['src/rules/kakashi-activate.md',  orchRule],
+    ['AGENTS.md',                      rootAgents],
+    ['CLAUDE.md',                      rootClaude],
+  ];
 
   // The set of subcommands the orchestrator MUST know about. Adding a new
   // CLI subcommand without teaching the orchestrator is a regression.
@@ -81,19 +104,23 @@ function runOrchestratorTests() {
   // MUST land at `guard`, not at a silent `mask`. The plan is explicit about
   // this: an agent that reads only `mask` here is dangerous.
   check('release-decision intent routes to `guard`, not a silent `mask`', () => {
-    // The dispatch table row must (a) be about a release / send / share
-    // question AND (b) name `guard` on the same row.
-    const lines = orchCmd.split('\n');
-    const releaseRow = lines.find((line) => {
+    // The dispatch table row must (a) be a real table row (pipe-delimited,
+    // not incidental prose that also contains the words), (b) be about a
+    // release/send/share question, AND (c) name `guard` on the same row.
+    //
+    // Filtering on "starts with |" avoids matching prose paragraphs that
+    // happen to mention the same keywords (e.g. the features brief).
+    const tableRows = orchCmd.split('\n').filter((line) => line.startsWith('|'));
+    const releaseRow = tableRows.find((line) => {
       const l = line.toLowerCase();
       return (
         (l.includes('release') || l.includes('send') || l.includes('share') || l.includes('paste'))
         && (l.includes('external') || l.includes('agent') || l.includes('destination'))
       );
     });
-    assert(releaseRow, 'No orchestrator row about releasing to an external model.');
+    assert(releaseRow, 'No dispatch-table row about releasing to an external model.');
     assert(/\bguard\b/.test(releaseRow),
-      `The release-decision row does not name guard: ${releaseRow.slice(0, 160)}`);
+      `The release-decision dispatch row does not name guard: ${releaseRow.slice(0, 160)}`);
   });
 
   check('rule file also directs release questions to guard', () => {
@@ -182,6 +209,112 @@ function runOrchestratorTests() {
         `No slash command wired for "${tool}" (looked for ${specific} / ${legacyAlias})`);
     }
   });
+
+  // -------------------------------------------------------------------------
+  // v1.3.1 invariants (the Codex CLI /Kakashi bug fix).
+  //
+  // Everything below asserts a contract that lives across ALL FOUR rule
+  // files, not just the two Cursor-facing ones. The bug the release fixes:
+  // a Codex CLI user typed /Kakashi and got "Unrecognized command" because
+  // the AGENTS.md their Codex loaded still had pre-v1.3 content (only 5
+  // slash commands, no orchestrator, no brief, no fallback for agents
+  // without a slash-command mechanism).
+  // -------------------------------------------------------------------------
+
+  // 1. All four files open with the same features brief so the user sees a
+  // consistent Kakashi identity no matter which agent they're in.
+  const BRIEF_MARKERS = [
+    'local privacy layer',       // brand identity
+    'before they leave',          // the value proposition
+    'Guardian',                   // the release-decision component
+    'agent-guard',                // the sidecar
+  ];
+  for (const [label, body] of ALL_RULE_FILES) {
+    check(`${label} carries the Kakashi features brief`, () => {
+      for (const marker of BRIEF_MARKERS) {
+        assert(body.includes(marker),
+          `${label} is missing brief marker: "${marker}"`);
+      }
+    });
+  }
+
+  // 2. Each file MUST teach the case-insensitive trigger contract. Codex
+  // CLI users type /Kakashi (capital K), 'use kakashi', or 'run kakashi'
+  // -- the agent must recognise those and not require the exact
+  // lowercase '/kakashi' spelling.
+  const TRIGGER_MARKERS = [
+    '/Kakashi',        // the exact capitalisation the reporter used
+    'use kakashi',     // plain-language invocation
+    'case-insensitive',// the label that tells the LLM to normalise
+  ];
+  for (const [label, body] of ALL_RULE_FILES) {
+    check(`${label} teaches case-insensitive triggers`, () => {
+      for (const marker of TRIGGER_MARKERS) {
+        assert(body.includes(marker),
+          `${label} is missing trigger marker: "${marker}"`);
+      }
+    });
+  }
+
+  // 3. Each file MUST document the "no slash-command mechanism" fallback so
+  // Codex CLI / Copilot / Continue users don't get told "kakashi is not a
+  // valid slash command" and give up.
+  const NO_SLASH_MARKERS = [
+    'Codex CLI',                    // the agent this fix was reported from
+    'Unrecognized',                 // the actual error string the user hits
+  ];
+  for (const [label, body] of ALL_RULE_FILES) {
+    check(`${label} teaches the no-slash-mechanism fallback for Codex / Copilot / Continue`, () => {
+      for (const marker of NO_SLASH_MARKERS) {
+        assert(body.includes(marker),
+          `${label} is missing no-slash marker: "${marker}" (this is the bug where Codex users hit "Unrecognized command '/kakashi'" and the AGENTS.md never taught the LLM to recover from it)`);
+      }
+    });
+  }
+
+  // 4. Root AGENTS.md and CLAUDE.md MUST list the full v1.3 slash-command
+  // catalogue. Pre-v1.3 those files only listed 5 commands (scan/mask/audit/
+  // stats/list); the fix brings them up to 14 so Codex / Claude Code users
+  // see everything Cursor users see.
+  const V13_COMMAND_MARKERS = [
+    '/kakashi-scan-dir',
+    '/kakashi-mask-dir',
+    '/kakashi-guard',
+    '/kakashi-db-scan',
+    '/kakashi-db-mask',
+    '/kakashi-agent-guard',
+    '/kakashi-impact',
+  ];
+  for (const [label, body] of [
+    ['AGENTS.md', rootAgents],
+    ['CLAUDE.md', rootClaude],
+  ]) {
+    check(`${label} lists the full v1.3 slash-command catalogue`, () => {
+      for (const marker of V13_COMMAND_MARKERS) {
+        assert(body.includes(marker),
+          `${label} is missing v1.3 command: ${marker}. Pre-v1.3 the file only listed 5 legacy commands; the release must ship the full 14.`);
+      }
+    });
+  }
+
+  // 5. AGENTS.md and CLAUDE.md MUST stay byte-identical -- the installer's
+  // loadActivateBlock() prefers CLAUDE.md when it exists and falls back to
+  // AGENTS.md, so any drift would silently make Claude Code and Codex CLI
+  // see different rules.
+  check('root AGENTS.md and CLAUDE.md are byte-identical (no drift)', () => {
+    assert.strictEqual(rootAgents, rootClaude,
+      'AGENTS.md and CLAUDE.md have drifted. The installer uses whichever exists; keeping them identical prevents Claude Code and Codex CLI from seeing different rules.');
+  });
+
+  // 6. The Guardian narrative labels the plan mandated must be named in
+  // every rule file so agents know to expect/emit them, not just in the
+  // Cursor-facing command file.
+  for (const [label, body] of ALL_RULE_FILES) {
+    check(`${label} names the Guardian THINK/ACT/REACT loop labels`, () => {
+      assert(body.includes('THINK') && body.includes('ACT') && body.includes('REACT'),
+        `${label} does not name the THINK/ACT/REACT stage labels; agents won't know to narrate Guardian's loop.`);
+    });
+  }
 
   console.log(`orchestrator.test.js: ${passed} passed, ${failed} failed`);
   return failed === 0;
