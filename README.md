@@ -13,12 +13,12 @@
 **hide what shouldn't leave your machine**
 
 [![npm](https://img.shields.io/badge/npm-%40muhammadatef%2Fkakashi-CC0000?style=flat&logo=npm&logoColor=white)](https://www.npmjs.com/package/@muhammadatef/kakashi)
-[![version](https://img.shields.io/badge/version-1.2.0-1C2030?style=flat)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.3.1-1C2030?style=flat)](CHANGELOG.md)
 [![node](https://img.shields.io/badge/node-%3E%3D18-4CAF50?style=flat)](https://nodejs.org)
 [![license](https://img.shields.io/badge/license-MIT-B8C4D4?style=flat)](LICENSE)
 [![agents](https://img.shields.io/badge/agents-20%2B-8A2BE2?style=flat)](#works-inside-your-agent)
 [![formats](https://img.shields.io/badge/formats-50%2B-CC0000?style=flat)](#50-file-formats)
-[![tests](https://img.shields.io/badge/tests-340_passing-4CAF50?style=flat)](tests/)
+[![tests](https://img.shields.io/badge/tests-407_passing-4CAF50?style=flat)](tests/)
 [![network calls](https://img.shields.io/badge/network_calls-zero-1C2030?style=flat)](#privacy-guarantee)
 
 **A local-first privacy engine for agentic AI.**
@@ -27,7 +27,7 @@ It finds secrets and personal data in your files, folders and databases — and 
 
 Nothing is uploaded. No daemon. No cloud. **Zero network calls.**
 
-[What it is](#what-kakashi-is) · [Install](#install) · [Upgrade](#upgrade-to-the-latest-version) · [Guardian](#the-guardian--autonomous-guardrails) · [Folders](#scan-a-whole-folder) · [Databases](#scan-and-mask-a-database) · [Agents](#works-inside-your-agent) · [Commands](#commands)
+[What it is](#what-kakashi-is) · [New in v1.3.1](#new-in-v131--kakashi-works-everywhere) · [Install](#install) · [Upgrade](#upgrade-to-the-latest-version) · [Guardian](#the-guardian--autonomous-guardrails) · [Folders](#scan-a-whole-folder) · [Databases](#scan-and-mask-a-database) · [Agents](#works-inside-your-agent) · [Commands](#commands)
 
 </div>
 
@@ -35,7 +35,7 @@ Nothing is uploaded. No daemon. No cloud. **Zero network calls.**
 
 ## What Kakashi is
 
-Kakashi started as a masker you invoke. As of **v1.2 it is three layers**, and you can use any one of them on its own.
+Kakashi started as a masker you invoke. As of **v1.3.1 it has three protection layers and a smart orchestrator**, and you can use any layer on its own or let `/kakashi` choose the right one from your intent.
 
 | Layer | What it does | Commands |
 | --- | --- | --- |
@@ -68,6 +68,29 @@ Kakashi started as a masker you invoke. As of **v1.2 it is three layers**, and y
 
 ---
 
+## New in v1.3.1 — `/kakashi` works everywhere
+
+v1.3 introduced the **Kakashi orchestrator**: one entry point that reads what you want to do and selects the right local command. v1.3.1 closes the activation gap in Codex, Copilot and Continue, whose runtimes do not provide native user-defined slash commands.
+
+Triggers work with or without a leading slash, in any letter case:
+
+```text
+kakashi
+/Kakashi check this file
+use kakashi to scan this repository
+KAKASHI can I send this report to Claude for a summary?
+```
+
+- **A bare trigger shows the features brief.** Kakashi explains Check, Mask, Guardian and the standing sidecar, offers example prompts, and waits for your intent.
+- **A trigger plus intent dispatches immediately.** A file check goes to `scan`; a repository audit goes to `scan-dir`; a database request starts with `db-scan`; and a release question goes to Guardian instead of silently masking the file.
+- **Agents with native command files receive all 14 commands.** The installer keeps the orchestrator and every dedicated file, folder, database, Guardian and evidence command together.
+- **Agents without native custom slash commands use the same behavior through their rule or system prompt.** If the runtime displays `Unrecognized command '/kakashi'`, follow with a plain-language request such as `use kakashi to check this file`; Kakashi treats that as the real trigger and continues normally.
+- **Rule parity is test-enforced.** The command definition, always-on rule, `AGENTS.md` and `CLAUDE.md` carry the same brief, trigger contract and command catalogue so supported agents do not drift onto different behavior.
+
+v1.3.1 does not change the pattern engine, Guardian decision loop or database drivers. It is backward-compatible with v1.3.0 tokens and workflows.
+
+---
+
 ## The Problem
 
 Every day, in every dev team, someone does this:
@@ -88,12 +111,12 @@ open("config/settings.py")
 Inside those files — without you noticing, without a warning, without any friction — are things that should never leave your machine:
 
 ```
-postgresql://admin:Pr0d_P@55word!@10.128.3.4:5432/customers
-sk-proj-aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789
-ghp_abc123def456ghi789jkl012mno345pqr678
-admin@example.com
-+1-415-555-0188
-4111-1111-1111-1111
+[DB_CONN_1]
+[OPENAI_KEY_1]
+[GH_TOKEN_1]
+[EMAIL_EXAMPLE]
+[PHONE_EXAMPLE]
+[CC_1]
 ```
 
 **They just traveled to a third-party server. In plaintext. With no undo.**
@@ -124,7 +147,7 @@ npm install -g @muhammadatef/kakashi
 npx -y github:Muhammadatef/kakashi
 ```
 
-**~30 seconds. Needs Node ≥ 18. Safe to re-run.**
+**~30 seconds. Requires a supported Node.js runtime (see the badge above). Safe to re-run.**
 
 Want to see what it will do first?
 
@@ -148,7 +171,7 @@ Check what you have:
 kakashi --version
 ```
 
-If it is below **1.2.0**, you do not have the Guardian, the folder scanner or the database commands. Upgrade:
+If it is below **1.3.1**, upgrade to get the latest orchestrator fixes, the complete 14-command catalogue and the activation brief:
 
 ```bash
 npm install -g @muhammadatef/kakashi@latest
@@ -167,7 +190,7 @@ node "$(npm root -g)/@muhammadatef/kakashi/bin/install.js" --all --force
 Verify:
 
 ```bash
-kakashi --version        # 1.2.0
+kakashi --version        # 1.3.1
 kakashi guard --help     # exists ⇒ the Guardian is installed
 node "$(npm root -g)/@muhammadatef/kakashi/bin/install.js" --list
 ```
@@ -193,8 +216,8 @@ kakashi mask  config/settings.py          # → masked_settings.py
 kakashi scan-dir ./repo -f html -o report.html
 
 # 3. a database
-kakashi db-scan "postgres://user@host/db" -q "SELECT * FROM customers"
-kakashi db-mask "postgres://user@host/db" -q "SELECT * FROM customers"
+kakashi db-scan "[DB_CONN_2]" -q "SELECT * FROM customers"
+kakashi db-mask "[DB_CONN_2]" -q "SELECT * FROM customers"
 
 # 4. hand the decision to the Guardian
 kakashi guard employees.md \
@@ -240,7 +263,7 @@ kakashi guard employees.md \
 Kakashi — Guardian
 
    Goal:        Protect sensitive information while preserving task utility
-   Agent:       Claude Code
+   Agent:       Claude
    Resource:    employees.md
    Task:        calculate average salary by age group
    Destination: External model API
@@ -456,14 +479,14 @@ Kakashi connects **from your machine**, streams rows locally, runs each one thro
 
 ```bash
 # counts only — agent-safe, writes nothing
-kakashi db-scan "postgres://user@host:5432/db" -q "SELECT * FROM customers"
+kakashi db-scan "[DB_CONN_3]" -q "SELECT * FROM customers"
 
 # query, mask locally, write a safe copy
-kakashi db-mask "postgres://user@host:5432/db" -q "SELECT * FROM customers" \
+kakashi db-mask "[DB_CONN_3]" -q "SELECT * FROM customers" \
   -f csv -o safe_customers.csv
 
 # full original → token map (DELIBERATELY verbose — exposes plaintext)
-kakashi db-audit "mysql://user@host/db" -q "SELECT * FROM users LIMIT 50"
+kakashi db-audit "[DB_CONN_4]" -q "SELECT * FROM users LIMIT 50"
 ```
 
 ```
@@ -481,12 +504,12 @@ Kakashi
 
 | Engine | Connection string |
 | --- | --- |
-| **PostgreSQL** | `postgres://` · `postgresql://` · `jdbc:postgresql:` |
-| **MySQL / MariaDB** | `mysql://` · `jdbc:mysql:` |
-| **MongoDB** | `mongodb://` · `mongodb+srv://` |
+| **PostgreSQL** | `[DB_CONN_5] · `[DB_CONN_6] · `jdbc:postgresql:` |
+| **MySQL / MariaDB** | `[DB_CONN_7] · `jdbc:mysql:` |
+| **MongoDB** | `[DB_CONN_8] · `[DB_CONN_9] |
 | **Snowflake** | `snowflake://` |
 | **Databricks** | `databricks://` |
-| **SQLite** | `sqlite://` or any `.db` / `.sqlite` / `.sqlite3` path |
+| **SQLite** | `[DB_CONN_10] or any `.db` / `.sqlite` / `.sqlite3` path |
 
 Database drivers are **optional dependencies**, lazily required — you only install the one you use, and Kakashi tells you exactly what to `npm install` if it is missing.
 
@@ -511,7 +534,7 @@ Kakashi runs locally; the LLM your agent talks to does not. That distinction mat
 > **Rule 1 — pass a path, not an `@`-mention.**<br/>
 > Use: `/kakashi-scan /path/to/file.env`<br/>
 > Avoid: `/kakashi-scan @file.env`<br/>
-> In Cursor, Claude Code, and most agents, `@`-mentions automatically attach the **full file body** to the LLM's context *before* Kakashi runs. The secrets travel to the model on that very turn. Path-only invocation keeps the file body off the wire — Kakashi reads it locally and the agent only ever sees the path string and the masked summary.
+> Cursor, Claude, and most agents automatically attach the **full file body** to the LLM's context when you use an `@`-mention, *before* Kakashi runs. The secrets travel to the model on that very turn. Path-only invocation keeps the file body off the wire — Kakashi reads it locally and the agent only ever sees the path string and the masked summary.
 
 > **Rule 2 — `scan` is agent-safe by default; `audit` is verbose by design.**<br/>
 > `/kakashi-scan` emits only counts (`17 findings (0 id · 2 personal info · 15 credentials)`) — no secret previews enter the agent's context. Use `--verbose` only from a plain terminal.<br/>
@@ -535,36 +558,44 @@ Kakashi's primary win is the **right-most column**: anything you share *downstre
 
 ## Works Inside Your Agent
 
-Six slash commands are installed straight into the agent's chat:
+Agents with a native command-file mechanism receive all 14 commands. Agents without one receive the same behaviors through an installed rule or system prompt:
 
 ```
-/kakashi              activate privacy mode for the session
-/kakashi-scan <path>  counts only — no secret previews (agent-safe, default)
-/kakashi-mask <path>  write masked_<file> alongside the original
-/kakashi-audit <path> full original → replacement mapping (DELIBERATELY exposes secrets)
-/kakashi-stats        cumulative session stats
-/kakashi-list         every active detection pattern
+/kakashi                    show the brief or pick the right tool from your intent
+/kakashi-scan <path>        scan one file; counts only (agent-safe)
+/kakashi-mask <path>        write masked_<file> alongside the original
+/kakashi-scan-dir <dir>     scan a folder and produce a PDPL-mapped report
+/kakashi-mask-dir <dir>     batch-mask a folder after confirmation
+/kakashi-guard <path>       decide whether a file may be released
+/kakashi-db-scan <conn>     scan database query results; counts only
+/kakashi-db-mask <conn>     mask query results into a safe local copy
+/kakashi-db-audit <conn>    show the DB token map (DELIBERATELY exposes plaintext)
+/kakashi-audit <path>       show the file token map (DELIBERATELY exposes plaintext)
+/kakashi-agent-guard <dir>  start the loopback-only privacy sidecar
+/kakashi-stats              show cumulative local counters
+/kakashi-list               list every active detection pattern
+/kakashi-impact             create a value-free impact snapshot
 ```
 
-Type one of these in the agent chat — the agent runs `kakashi` in the terminal under the hood and shows you the result. You never leave the agent.
+Ask from the agent chat and it runs `kakashi` locally under the hood. When using Codex CLI, Copilot or Continue, choose a plain-language trigger such as `use kakashi to scan this folder` when the runtime does not accept custom slash commands.
 
 | Agent | Auto-activates | Slash commands | Install |
 |-------|:--------------:|:--------------:|---------|
-| **Claude Code** | **always** | full set (6) | `--only claude` |
-| **Cursor** | **always** | full set (6) | `--only cursor` |
-| **OpenAI Codex** | **always** | full set (6) | `--only codex` |
-| **Windsurf** | **always** | full set (6) | `--only windsurf` |
-| **Cline** | **always** | full set (6) | `--only cline` |
-| **GitHub Copilot** | **always** | via `.github/copilot-instructions.md` | `--only copilot` |
-| **Continue** | _per session_ | `/kakashi` | `--only continue` |
+| **Claude** | **always** | full set (14) | `--only claude` |
+| **Cursor** | **always** | full set (14) | `--only cursor` |
+| **Codex** | **always** | plain-language orchestration | `--only codex` |
+| **Windsurf** | **always** | full set (14) | `--only windsurf` |
+| **Cline** | **always** | full set (14) | `--only cline` |
+| **Copilot** | **always** | via `.github/copilot-instructions.md` | `--only copilot` |
+| **Continue** | _per session_ | plain-language orchestration | `--only continue` |
 | **Aider** | _per session_ | `/kakashi` | `--only aider` |
-| **Roo Code** | _per session_ | `/kakashi` | `--only roo` |
-| **Kilo Code** | _per session_ | `/kakashi` | `--only kilo` |
+| **Roo** | _per session_ | `/kakashi` | `--only roo` |
+| **Kilo** | _per session_ | `/kakashi` | `--only kilo` |
 | **OpenHands** | _per session_ | `/kakashi` | `--only openhands` |
 | **Warp** | _per session_ | `/kakashi` | `--only warp` |
-| **Replit Agent** | _per session_ | `/kakashi` | `--only replit` |
-| **Augment Code** | _per session_ | `/kakashi` | `--only augment` |
-| **JetBrains Junie** | _per session_ | `/kakashi` | `--only junie` |
+| **Replit** | _per session_ | `/kakashi` | `--only replit` |
+| **Augment** | _per session_ | `/kakashi` | `--only augment` |
+| **Junie** | _per session_ | `/kakashi` | `--only junie` |
 
 > **always** = always on, activates from first message<br/>
 > _per session_ = type `/kakashi` once per session to activate
@@ -620,44 +651,44 @@ Docs        .md  .rst  .txt  .log
 
 ```
 OpenAI Key         sk-proj-aBcDeF...      →  [OPENAI_KEY_1]
-Anthropic Key      sk-ant-api03-...       →  [ANTHROPIC_1]
-AWS Key            AKIAIOSFODNN7EXAMPLE   →  [AWS_KEY_1]
+Anthropic key       [ANTHROPIC_EXAMPLE]     →  [ANTHROPIC_1]
+AWS Key            [AWS_KEY_1]   →  [AWS_KEY_1]
 GitHub Token       ghp_aBcDeFgHiJ...      →  [GH_TOKEN_1]
-Stripe Key         sk_live_aBcDeF...      →  [STRIPE_1]
-Slack Token        xoxb-123456-...        →  [SLACK_1]
+Stripe key          [STRIPE_EXAMPLE]        →  [STRIPE_1]
+Slack token         [SLACK_EXAMPLE]         →  [SLACK_1]
 HuggingFace        hf_aBcDeFgHiJ...       →  [HF_TOKEN_1]
-Databricks Token   dapi1234567890abcdef...→  [DATABRICKS_TOKEN_1]
-Databricks Host    https://dbc-a1b2...    →  [DATABRICKS_HOST_1]
-S3 URI             s3://prod-bucket/...   →  [S3_URI_1]
+Databricks token    [DATABRICKS_EXAMPLE]    →  [DATABRICKS_TOKEN_1]
+Databricks host     [DBX_HOST_EXAMPLE]      →  [DATABRICKS_HOST_1]
+S3 URI              [S3_URI_EXAMPLE]        →  [S3_URI_1]
 JWT Token          eyJhbGciOiJIUzI1...    →  [JWT_1]
-Bearer Token       Bearer eyJhbGci...     →  [BEARER_1]
-DB Connection      postgresql://user:p... →  [DB_CONN_1]
+Bearer token        [BEARER_EXAMPLE]        →  [BEARER_1]
+DB Connection      [DB_CONN_11] →  [DB_CONN_1]
 SQL Password       IDENTIFIED BY 'S3cr... →  IDENTIFIED BY [SQL_PASSWORD_1]
 SSH Private Key    -----BEGIN RSA...      →  [SSH_KEY_1]
-ENV Secret         API_KEY=abc123...      →  [ENV_SECRET_1]
-Hex Secret         a1b2c3d4e5f6... (40+)  →  [HEX_SECRET_1]
+ENV Secret         API_KEY=[ENV_SECRET_1]      →  [ENV_SECRET_1]
+Hex secret          [HEX_EXAMPLE] (40+)     →  [HEX_SECRET_1]
 ```
 
 ### Identity & personal info
 
 ```
-Emirates ID        784-1990-1234567-1     →  [NATIONAL_ID_1]      ← checksum-verified
-Passport           AB1234567              →  [PASSPORT_1]
-Visa Number        123/2020/1234567       →  [VISA_ID_1]
+Emirates ID        [NATIONAL_ID_1]     →  [NATIONAL_ID_1]      ← checksum-verified
+Passport           [PASSPORT_1]              →  [PASSPORT_1]
+Visa Number        [VISA_ID_1]       →  [VISA_ID_1]
 Unified ID         1234567890             →  [UNIFIED_ID_1]
 UAE IBAN           AE070331234567890123   →  [UAE_IBAN_1]         ← mod-97 verified
-Trade License      CN-1234567             →  [TRADE_LIC_1]
-P.O. Box           P.O. Box 12345         →  [POBOX_1]
-Email              user@example.com       →  [EMAIL_1]
-UAE Phone          +971-50-123-4567       →  [INTL_PHONE_1]
-Phone              +1-415-555-0188        →  [PHONE_1]
-IP Address         10.128.3.4             →  [IP_1]
-Credit Card        4111 1111 1111 1111    →  [CC_1]               ← Luhn-verified
-SSN / National ID  123-45-6789            →  [SSN_1]
-Date of Birth      DOB: 15/03/1990        →  [DOB_1]
-Age                age: 34                →  [AGE_1]
-Full Name          Alex Taylor            →  [FULL_NAME_1]
-Arabic Name        محمد عاطف فهمي           →  [NON_LATIN_NAME_1]
+Trade license      [TRADE_LICENSE_EXAMPLE] →  [TRADE_LIC_1]
+P.O. Box           [POBOX_EXAMPLE]         →  [POBOX_1]
+Email              [EMAIL_EXAMPLE]         →  [EMAIL_1]
+UAE Phone          [UAE_PHONE_EXAMPLE]     →  [INTL_PHONE_1]
+Phone              [PHONE_EXAMPLE]         →  [PHONE_1]
+IP Address         [IP_EXAMPLE]            →  [IP_1]
+Credit Card        [CC_2]    →  [CC_1]               ← Luhn-verified
+SSN / National ID  [SSN_1]            →  [SSN_1]
+Date of Birth      [DOB_EXAMPLE]           →  [DOB_1]
+Age                [AGE_EXAMPLE]           →  [AGE_1]
+Full name          [NAME_EXAMPLE]          →  [FULL_NAME_1]
+Arabic name        [ARABIC_NAME_EXAMPLE]   →  [NON_LATIN_NAME_1]
 ```
 
 Checksum-verified classes are a distinct risk signal to the Guardian: an identifier that *passes* its checksum is live, not a lookalike, and scores higher.
@@ -669,7 +700,7 @@ Checksum-verified classes are a distinct risk signal to the Guardian: an identif
 ```bash
 kakashi mask file.env --mode typed    # [EMAIL_1] [DB_CONN_2]  ← default, keeps doc readable
 kakashi mask file.env --mode redact   # [REDACTED]             ← maximum anonymity
-kakashi mask file.env --mode fake     # user_a@example.com     ← preserves LLM context
+kakashi mask file.env --mode fake     # [SYNTHETIC_EMAIL]      ← preserves LLM context
 ```
 
 **Consistency guarantee:** the same original value gets the same replacement throughout the document — which is exactly what lets a masked dataset still be grouped, joined and counted. The masked file still makes sense to the AI.
@@ -683,10 +714,10 @@ kakashi mask file.env --mode fake     # user_a@example.com     ← preserves LLM
 ### `.env` file
 
 ```diff
-- DATABASE_URL=postgresql://admin:Pr0d_P@55w0rd!@db.example.com:5432/customers
-- OPENAI_API_KEY=sk-proj-xK9mN2pQrStUvWxYz1234567890abcdef
-- STRIPE_SECRET=sk_live_51HGk2nKZ6eKyOrNm1234567890
-- SUPPORT_EMAIL=support@example.com
+- DATABASE_URL=[DB_CONN_12]
+- OPENAI_API_KEY=[OPENAI_KEY_2]
+- STRIPE_SECRET=[STRIPE_1]
+- SUPPORT_EMAIL=[EMAIL_EXAMPLE]
 + DATABASE_URL=[DB_CONN_1]
 + OPENAI_API_KEY=[OPENAI_KEY_1]
 + STRIPE_SECRET=[STRIPE_1]
@@ -695,18 +726,18 @@ kakashi mask file.env --mode fake     # user_a@example.com     ← preserves LLM
 
 ### SQL file
 
-SQL auth clauses delimit the secret with a space (`IDENTIFIED BY '...'`, `WITH PASSWORD '...'`), so Kakashi masks just the value and leaves the statement readable — perfect for asking an agent to optimize a query or review a schema without leaking credentials or customer records.
+SQL auth clauses delimit the secret with a space (`IDENTIFIED BY [SQL_PASSWORD_1]`, `WITH PASSWORD [SQL_PASSWORD_1]`), so Kakashi masks just the value and leaves the statement readable — perfect for asking an agent to optimize a query or review a schema without leaking credentials or customer records.
 
 ```diff
-- CREATE USER reporting IDENTIFIED BY 'Sup3rS3cret!';
+- CREATE USER reporting IDENTIFIED BY [SQL_PASSWORD_2];
 - INSERT INTO customers (id, full_name, email) VALUES
--   (1, 'John Smith', 'john.smith@example.com');
+-   (1, '[NAME_EXAMPLE]', '[EMAIL_EXAMPLE]');
 + CREATE USER reporting IDENTIFIED BY [SQL_PASSWORD_1];
 + INSERT INTO customers (id, full_name, email) VALUES
 +   (1, '[FULL_NAME_1]', '[EMAIL_1]');
 ```
 
-> Need a **runnable** file with synthetic data (e.g. to seed a dev database)? Use `--mode fake` — it substitutes realistic stand-ins like `IDENTIFIED BY 'P@ssw0rd!'`, keeping the SQL valid.
+> Need a **runnable** file with synthetic data (e.g. to seed a dev database)? Use `--mode fake` — it substitutes realistic stand-ins like `IDENTIFIED BY [SQL_PASSWORD_3]`, keeping the SQL valid.
 
 ---
 
@@ -764,14 +795,14 @@ There are plenty of secret scanners and PII libraries. None of them sit *inside*
 | GitLeaks | No | Yes | No — detect only | No | No | partial |
 | TruffleHog | No | Yes | No — detect only | No | No | partial |
 | detect-secrets (Yelp) | No | Yes | No — detect only | No | No | partial |
-| Microsoft Presidio | No — Python SDK | Yes | Yes | No — text only | No | No — heavy stack |
+| Presidio | No — Python SDK | Yes | Yes | No — text only | No | No — heavy stack |
 | AWS Comprehend / Macie | No | No — cloud | Yes | No | No | No |
 | Google DLP / Azure PII | No | No — cloud | Yes | No | No | No |
-| Skyflow / Tonic Textual | No | No — cloud | Yes | partial | No | No |
+| Skyflow / PrivateAI | No | No — cloud | Yes | partial | No | No |
 | `redact-pii` (npm) | No | Yes | partial | No | No | Yes |
-| Generic Cursor/Claude rules | Yes, but DIY | Yes | No — no engine | No | No | No |
+| MCP / Claude rules | Yes, but DIY | Yes | No — no engine | No | No | No |
 
-**Where Kakashi is genuinely the only option:**
+**Kakashi is genuinely the only option:**
 
 - The only open-source tool that ships as a **skill / rule for 20+ AI coding agents** out of the box.
 - The only one that **masks `.docx`, `.xlsx`, `.pptx` while reconstructing the original format** — you get a real Word/Excel file back.
@@ -809,7 +840,7 @@ GitLeaks and TruffleHog only catch leaks that already made it into git. Presidio
 
 ## Why "Kakashi"?
 
-> *Kakashi Hatake. The Copy Ninja. Always masked. Copies every technique he encounters. Adapts to any environment.*
+> *The copy ninja. Always masked. Copies every technique he encounters. Adapts to any environment.*
 
 The tool **masks what should stay hidden** — like the character never shows his face.<br/>
 It **copies itself** into every agent it finds — like the ninja copies every jutsu he sees.<br/>
@@ -846,7 +877,7 @@ Patterns, formats, agents — all welcome.
 git clone https://github.com/Muhammadatef/kakashi
 cd kakashi
 npm install
-npm test        # 340 tests, offline, a few seconds
+npm test        # 407 tests, offline, a few seconds
 ```
 
 New pattern? Add to `src/engine/patterns.js` — **and classify it** in `src/guardian/classes.js`, or the drift guard fails the build.<br/>
@@ -866,10 +897,10 @@ MIT — see [LICENSE](LICENSE).
 
 <div align="center">
 
-**kakashi** · MIT · built by [Mohamed Atef Fahmy](https://github.com/Muhammadatef) · [LinkedIn](https://www.linkedin.com/in/mohamed-atef-fahmy-75475a125/)
+**kakashi** · MIT · built by [@Muhammadatef](https://github.com/Muhammadatef)
 
 *"In this world, whenever there is light, there are also shadows."*<br/>
-*— Hatake Kakashi*
+*— Madara*
 
 <br/>
 
