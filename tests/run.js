@@ -17,6 +17,11 @@ const { runOrchestratorTests } = require('./orchestrator.test');
 const { runGuardianNarrativeTests } = require('./guardian-narrative.test');
 const { runGuardFallbackTests } = require('./guard-fallback.test');
 const { runImpactTests } = require('./impact.test');
+const { runSweepTests } = require('./sweep.test');
+const { runSweepKindsTests } = require('./sweep-kinds.test');
+const { runSweepPolicyTests } = require('./sweep-policy.test');
+const { runSweepReduceTests } = require('./sweep-reduce.test');
+const { runSweepLoopTests } = require('./sweep-loop.test');
 
 (async () => {
   let ok = true;
@@ -40,6 +45,12 @@ const { runImpactTests } = require('./impact.test');
   ok = (await runGuardianNarrativeTests()) && ok;
   ok = (await runGuardFallbackTests()) && ok;
   ok = runImpactTests() && ok;
+  // v1.4 Layer 4 · Sweep
+  ok = runSweepKindsTests() && ok;
+  ok = (await runSweepTests()) && ok;
+  ok = (await runSweepPolicyTests()) && ok;
+  ok = (await runSweepReduceTests()) && ok;
+  ok = (await runSweepLoopTests()) && ok;
 
   console.log(ok ? '\nAll tests passed.' : '\nSome tests failed.');
   process.exit(ok ? 0 : 1);

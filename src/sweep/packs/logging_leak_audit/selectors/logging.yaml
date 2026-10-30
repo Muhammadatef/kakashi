@@ -1,0 +1,48 @@
+- id: logging.regex.personal_field
+  kind: regex
+  description: Log, print or console calls that reference personal attributes (email, phone, national id, name, address, dob)
+  rationale: Logs are shipped to aggregators with broad access and long retention; a personal attribute in a log line is a disclosure with no purpose limitation.
+  sensitivity_class: CONTACT
+  evidence_kind: log
+  languages: [python, notebook, javascript]
+  query:
+    pattern: "\\b(log(ger|ging)?\\.(debug|info|warn|warning|error|exception|critical)|print|console\\.(log|info|warn|error|debug))\\s*\\(.*\\b(e_?mail|phone|mobile|msisdn|national_id|emirates_id|iqama|passport|full_name|first_name|last_name|address|dob|date_of_birth)\\b"
+    flags: i
+  fixtures:
+    positive:
+      - path: app/signup.py
+        text: |
+          logger.info(f"new signup {user.email}")
+      - path: web/signup.js
+        text: |
+          console.log("signup", req.body.phone);
+    negative:
+      - path: app/signup.py
+        text: |
+          logger.info("signup completed")
+      - path: app/signup.py
+        text: |
+          send_email(user.email)
+
+- id: logging.regex.secret_field
+  kind: regex
+  description: Log, print or console calls that reference secrets (password, token, api key, secret, authorization header)
+  rationale: A credential in a log is a credential handed to everyone with log access; it must be treated as compromised.
+  sensitivity_class: CREDENTIAL
+  evidence_kind: log
+  languages: [python, notebook, javascript]
+  query:
+    pattern: "\\b(log(ger|ging)?\\.(debug|info|warn|warning|error|exception|critical)|print|console\\.(log|info|warn|error|debug))\\s*\\(.*\\b(password|passwd|secret|api_?key|access_?token|auth_?token|token|authorization)\\b"
+    flags: i
+  fixtures:
+    positive:
+      - path: app/auth.py
+        text: |
+          logging.debug("login %s %s", username, password)
+      - path: web/auth.js
+        text: |
+          console.debug(`auth header ${headers.authorization}`);
+    negative:
+      - path: app/auth.py
+        text: |
+          logging.info("login ok")

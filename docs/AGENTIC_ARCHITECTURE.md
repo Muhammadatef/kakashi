@@ -553,6 +553,24 @@ The Guardian's own behaviour here is unchanged, and the escalation above is no l
 reproducible for that fixture — which is the point: the verify step was what turned a
 silent masking failure into a visible one in the first place.
 
+## Layer 4 · Sweep (v1.4.0)
+
+Sweep audits a whole repository for personal-data flow. It reuses the
+engine (Layer 1), the reach (Layer 2) and the Guardian (Layer 3) and adds a
+deterministic orchestrator around a host-agent worker:
+
+OBSERVE fingerprint → UNDERSTAND TASK → PLAN selectors → POLICY
+`assertCoverageNonWeakening` → ACT (shard / batch / Guardian-guarded
+views) → MAP (host agent via `sweep next` / `sweep submit`) → VERIFY
+(schema, exactly-once, value re-scan, edges) → REPLAN (reissue / split /
+escalate, `--max-iterations 4`) → REDUCE (dedupe, flow graph, chains, PDPL,
+CODEOWNERS) → COMPLETE / PARTIAL / BLOCKED.
+
+Trust boundary: the worker model sees only guarded views of
+selector-matched files, never raw values; Kakashi alone decides the
+outcome; zero network. Code: `src/sweep/`. Full design:
+[SWEEP.md](SWEEP.md), [ADR 0001](adr/0001-kakashi-orchestrates-llm-judges.md).
+
 ## 23. Not implemented
 
 Milestones 5–10 are specified in this document but not built: UAE policy pack,

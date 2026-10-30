@@ -23,6 +23,10 @@ In this session you can, on the user's behalf:
 - **Standing sidecar** — run a loopback-only HTTP daemon
   (`agent-guard`) that any MCP-enabled agent can consult before shipping
   data.
+- **Layer 4 Sweep** — run a deterministic, auditable data-flow audit of a
+  whole repository ("where does customer data go?"). Kakashi orchestrates
+  the loop; your agent only judges Guardian-guarded views of the code,
+  never raw values. Decision: COMPLETE / PARTIAL / BLOCKED.
 
 Detection coverage: government IDs, passports, visas, IBANs, credit cards,
 emails, phones, IPs, dates, names, ages, plus every common credential class
@@ -45,7 +49,7 @@ orchestrator:
   `/kakashi-scan-dir`, `/kakashi-mask-dir`, `/kakashi-guard`,
   `/kakashi-db-scan`, `/kakashi-db-mask`, `/kakashi-db-audit`,
   `/kakashi-agent-guard`, `/kakashi-audit`, `/kakashi-stats`,
-  `/kakashi-list`, `/kakashi-impact`)
+  `/kakashi-list`, `/kakashi-impact`, `/kakashi-sweep`)
 
 **If the user's message is only the trigger with no additional intent**,
 show the "What Kakashi is" brief above, list 4-5 example prompts they
@@ -87,6 +91,7 @@ fits. Every row runs a specific `kakashi` subcommand.
 | "may I send / release / share / paste this file to / into an external model / another agent?" or gives an agent + task + destination | **`kakashi guard --json`** → narrate THINK/OBSERVE/ASSESS/PLAN/ACT/VERIFY/REACT; honour exit 0/3/4 | Release decision. Only Guardian authorises releases. |
 | "is this file safe?" / "check this file" / "scan this file" + one file path | **`kakashi scan <path>`**; if findings > 0, offer `mask` or (if destination stated) escalate to `guard` | Single-file privacy check. |
 | "mask / redact / anonymise this file" | **`kakashi scan <path>`** → then **`kakashi mask <path>`** → re-scan the masked sibling | Two-step so the user sees the finding profile before the write. |
+| "audit where customer data goes in this repo" / "data-flow audit" / "where does PII flow" / "PDPL data lineage" | **`kakashi sweep <dir> --task "<intent>" --agent <id> --destination external_model --json`** → loop `kakashi sweep next` / `kakashi sweep submit` per batch → `kakashi sweep reduce` → `kakashi sweep report -f md` (see `/kakashi-sweep`) | Layer 4 Sweep. Kakashi orchestrates; the agent only judges guarded views. Exit 0 COMPLETE, 1 PARTIAL, 3 REQUIRE_APPROVAL (stop, ask a human), 4 BLOCKED. |
 | "check / scan / audit this folder / repo / project / directory / drive" | **`kakashi scan-dir <path> -f html -o kakashi-report.html`** | Estate-level compliance report. |
 | "compliance report / PDPL / estate scan / audit this codebase" | Same `scan-dir` flow; frame output as regulatory evidence with the top PDPL articles cited | Regulatory framing. |
 | "mask everything in this folder / batch mask" + a directory | **Confirm size first**, then **`kakashi mask-dir <dir> -r`** | Destructive-adjacent (many new files). Never skip the confirmation. |
@@ -212,6 +217,7 @@ invokes them by plain-language triggers as documented above.
 | `/kakashi-db-mask <conn> -q <query>` | `kakashi db-mask <conn> -q <query> -f csv -o masked_query.csv --limit 1000` |
 | `/kakashi-db-audit <conn> -q <query>` | `kakashi db-audit ...` (human-only; WARN first) |
 | `/kakashi-agent-guard <dir>` | `kakashi agent-guard --watch <dir> --port 8797` |
+| `/kakashi-sweep <dir> <intent>` | `kakashi sweep "<dir>" --task "<intent>" --agent ... --destination external_model --json`, then the next/submit worker loop |
 | `/kakashi-audit <path>` | `kakashi audit <path>` (human-only; WARN first) |
 | `/kakashi-stats` / `/kakashi-list` / `/kakashi-impact` | Evidence commands |
 

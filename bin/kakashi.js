@@ -663,6 +663,343 @@ program
     }
   });
 
+// ---------------------------------------------------------------------------
+// sweep — Layer 4: privacy-safe Agentic MapReduce over a whole repository.
+//
+// Kakashi orchestrates and decides; the host agent only judges bounded batches
+// of guarded code. `sweep <dir>` is the default subcommand, so
+// `kakashi sweep ./repo --dry-run` and `kakashi sweep selectors validate` both
+// work. Exit codes: 0 COMPLETE (or a clean dry run), 1 PARTIAL / signals found,
+// 2 error, 3 REQUIRE_APPROVAL, 4 BLOCKED.
+// ---------------------------------------------------------------------------
+const sweepCmd = program
+  .command('sweep')
+  .description('Layer 4 · Sweep: audit where sensitive data flows through a repo (dbt / SQL / Airflow / Python)');
+
+/** Print JSON to stdout (agent-safe: every sweep payload is value-free). */
+function sweepJson(obj) { process.stdout.write(`${JSON.stringify(obj, null, 2)}\n`); }
+
+function openSweepStore(options) {
+  const { RunStore } = require('../src/sweep/run-store');
+  return RunStore.open(path.resolve(options.dir || '.'), options.run);
+}
+
+function printSweepDecision(d, t) {
+  const color = d.decision === 'COMPLETE' ? chalk.green : d.decision === 'BLOCKED' ? chalk.red : chalk.yellow;
+  console.error(color(`   ${t('sweep_decision')}: ${d.decision} (${d.reasonCode}) · ${d.accounted}/${d.signals} ${t('sweep_accounted')} (${d.accountedPct}%)`));
+  for (const g of d.gaps.slice(0, 20)) console.error(chalk.yellow(`     - [${g.type}] ${g.id}: ${g.reason}${g.files ? ` (${g.files.join(', ')})` : ''}`));
+  if (d.gaps.length > 20) console.error(chalk.yellow(`     … ${d.gaps.length - 20} more`));
+}
+
+sweepCmd
+  .command('run <directory>', { isDefault: true })
+  .description('Plan a sweep over <directory> and open a resumable run (workers then loop `sweep next` / `sweep submit`)')
+  .option('-t, --task <text>', 'What the audit is for (can only make coverage stricter)')
+  .option('-a, --agent <id>', 'Host agent that will run Map workers', 'unknown')
+  .option('-d, --destination <id>', 'Where workers run: external_model | local_model', 'external_model')
+  .option('-p, --policy <id>', 'Policy id', 'default')
+  .option('--pack <ids>', 'Comma-separated extra selector packs (the pii_flow_audit floor is always included)')
+  .option('--since <ref>', 'Incremental: re-shard only files changed since <ref> plus dbt neighbours')
+  .option('--approve <classes>', 'Comma-separated data classes a human approves for guarded views (e.g. CREDENTIAL)')
+  .option('--max-iterations <n>', 'Attempts per batch before failing closed', '4')
+  .option('--token-budget <n>', 'Max estimated tokens per batch')
+  .option('--audit-log <path>', 'Value-free audit log (default ~/.kakashi/guardian-audit.jsonl)')
+  .option('--no-gitignore', 'Do NOT honour .gitignore / .kakashiignore')
+  .option('--dry-run', 'Fingerprint, shard and batch only; write nothing')
+  .option('--lang <lang>', 'Output language: en | ar', 'en')
+  .option('--json', 'Machine-readable, value-free output')
+  .action(async (directory, options) => {
+    const { planSweep } = require('../src/sweep');
+    const { analyzeSweepTask } = require('../src/sweep/intent');
+    const { t } = require('../src/lib/i18n');
+    const list = (s) => (s ? s.split(',').map((x) => x.trim()).filter(Boolean) : []);
+    const analysis = analyzeSweepTask(options.task);
+    const packs = [...new Set([...analysis.packs, ...list(options.pack)])].sort();
+    const common = {
+      dir: directory,
+      task: options.task,
+      packs,
+      respectGitignore: options.gitignore !== false,
+      tokenBudget: options.tokenBudget ? parseInt(options.tokenBudget, 10) : undefined,
+    };
+    let plan;
+    let store = null;
+    let decision = null;
+    try {
+      if (options.dryRun) {
+        plan = await planSweep(common);
+      } else {
+        const { startRun } = require('../src/sweep/loop');
+        ({ store, plan, decision } = await startRun({
+          ...common,
+          agent: options.agent,
+          destination: options.destination,
+          policy: options.policy,
+          since: options.since,
+          approvals: list(options.approve).map((c) => c.toUpperCase()),
+          maxIterations: parseInt(options.maxIterations, 10) || 4,
+          auditLog: options.auditLog,
+        }));
+      }
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      return finishWith(2);
+    }
+    const notes = [...new Set([...analysis.notes, ...plan.notes])].sort();
+    const { _selectors, root, scope, ...publicPlan } = plan;
+    if (options.json) {
+      sweepJson({
+        dryRun: !!options.dryRun,
+        run_id: store ? store.runId : null,
+        intents: analysis.intents,
+        ...publicPlan,
+        notes,
+        incremental: store ? store.manifest().incremental : null,
+        decision,
+        next: store ? `kakashi sweep next --dir ${directory}` : null,
+      });
+      if (decision) return finishWith(require('../src/sweep/loop').exitCodeFor(decision));
+      return finishWith(plan.signals.length > 0 ? 1 : 0);
+    }
+    const c = plan.coverage;
+    console.error(chalk.cyan(`\n${BRAND} — sweep${options.dryRun ? ' (dry run)' : ` · ${store.runId}`}`));
+    console.error(chalk.gray(`   ${t('sweep_observe')}: ${c.filesInScope} ${t('sweep_files_in_scope')} · ${Object.entries(plan.fingerprint.languages).map(([k, v]) => `${k} ${v}`).join(', ')}`));
+    if (plan.fingerprint.dbt.projects.length) console.error(chalk.gray(`   dbt: ${plan.fingerprint.dbt.projects.join(', ')} (${plan.dbt && plan.dbt.manifestUsed ? 'manifest.json' : t('sweep_dbt_static')})`));
+    if (plan.fingerprint.airflow.dagDirs.length) console.error(chalk.gray(`   Airflow: ${plan.fingerprint.airflow.dagDirs.join(', ')}`));
+    if (notes.includes('TASK_NOT_STATED')) console.error(chalk.yellow(`   ${t('sweep_task_not_stated')}`));
+    console.error(chalk.gray(`   ${t('sweep_plan')}: ${packs.join(', ')} · ${plan.selectors.count} ${t('sweep_selectors')} (${plan.selectors.hash})`));
+    for (const d of plan.degradations) console.error(chalk.yellow(`   ${t('sweep_degraded')}: ${d.purpose} — ${d.install}`));
+    console.error(chalk.white(`   ${t('sweep_shard')}: ${c.signals} ${t('sweep_signals')} · ${c.filesWithSignals}/${c.filesInScope} ${t('sweep_files_with_signals')}`));
+    for (const [id, n] of Object.entries(c.bySelector)) if (n > 0) console.error(chalk.gray(`     ${id.padEnd(40)} ${n}`));
+    const zero = Object.entries(c.bySelector).filter(([, n]) => n === 0).length;
+    if (zero) console.error(chalk.gray(`     (${zero} ${t('sweep_selectors_no_match')})`));
+    console.error(chalk.white(`   ${t('sweep_batch')}: ${plan.batching.count} ${t('sweep_batches')} (≤ ${plan.batching.tokenBudget} tokens)`));
+    if (c.skippedByIgnoreFile > 0) console.error(chalk.yellow(`   ${t('sweep_ignored')}: ${c.skippedByIgnoreFile}`));
+    if (c.shardErrors.length || c.filesUnreadable.length) {
+      console.error(chalk.red(`   ${t('sweep_coverage_errors')}: ${c.shardErrors.length + c.filesUnreadable.length}`));
+    }
+    console.error(chalk.gray(`   ${t('sweep_scope_statement')}`));
+    if (decision) {
+      const inc = store.manifest().incremental;
+      if (inc) console.error(chalk.gray(`   ${t('sweep_incremental')}: ${inc.changedFiles.length} changed · ${inc.reused} reused`));
+      printSweepDecision(decision, t);
+      if (decision.decision !== 'BLOCKED') console.error(chalk.cyan(`   ${t('sweep_next_hint')}: kakashi sweep next --dir ${directory}`));
+      console.error('');
+      return finishWith(require('../src/sweep/loop').exitCodeFor(decision));
+    }
+    console.error('');
+    return finishWith(plan.signals.length > 0 ? 1 : 0);
+  });
+
+sweepCmd
+  .command('next')
+  .description('Issue the next batch for a Map worker (JSON: signals, guarded view paths, findings schema)')
+  .option('--dir <repo>', 'Repository root of the run', '.')
+  .option('--run <id>', 'Run id (default: latest)')
+  .option('--reissue-stale', 'Also re-offer batches issued earlier but never submitted (crashed worker)')
+  .action(async (options) => {
+    try {
+      const { nextBatch, exitCodeFor } = require('../src/sweep/loop');
+      const job = await nextBatch(openSweepStore(options), { reissueStale: !!options.reissueStale });
+      sweepJson(job);
+      return finishWith(job.done ? exitCodeFor(job.decision) : 0);
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      return finishWith(2);
+    }
+  });
+
+sweepCmd
+  .command('submit <batchId> <findings>')
+  .description('Return a worker\'s findings JSON for a batch; VERIFY accepts it or sends the batch back')
+  .option('--dir <repo>', 'Repository root of the run', '.')
+  .option('--run <id>', 'Run id (default: latest)')
+  .action((batchId, findings, options) => {
+    try {
+      const { submit } = require('../src/sweep/loop');
+      const raw = fs.readFileSync(findings, 'utf8');
+      const res = submit(openSweepStore(options), batchId, raw);
+      sweepJson(res);
+      return finishWith(res.accepted ? 0 : 1);
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      return finishWith(2);
+    }
+  });
+
+sweepCmd
+  .command('narrative <file>')
+  .description('Attach the host agent\'s chain narratives / remediation text (re-scanned for values)')
+  .option('--dir <repo>', 'Repository root of the run', '.')
+  .option('--run <id>', 'Run id (default: latest)')
+  .action((file, options) => {
+    try {
+      const { submitNarrative } = require('../src/sweep/loop');
+      const res = submitNarrative(openSweepStore(options), fs.readFileSync(file, 'utf8'));
+      sweepJson(res);
+      return finishWith(res.accepted ? 0 : 1);
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      return finishWith(2);
+    }
+  });
+
+sweepCmd
+  .command('status')
+  .description('Progress, gaps and the decision so far')
+  .option('--dir <repo>', 'Repository root of the run', '.')
+  .option('--run <id>', 'Run id (default: latest)')
+  .option('--lang <lang>', 'Output language: en | ar', 'en')
+  .option('--json', 'Machine-readable output')
+  .action((options) => {
+    try {
+      const { decide, exitCodeFor } = require('../src/sweep/loop');
+      const { t } = require('../src/lib/i18n');
+      const store = openSweepStore(options);
+      const d = decide(store);
+      const byStatus = {};
+      for (const b of store.batches()) byStatus[b.status] = (byStatus[b.status] || 0) + 1;
+      if (options.json) {
+        sweepJson({ run_id: store.runId, batches: byStatus, decision: d, incremental: store.manifest().incremental });
+      } else {
+        console.error(chalk.cyan(`\n${BRAND} — sweep status · ${store.runId}`));
+        console.error(chalk.gray(`   ${t('sweep_batches')}: ${Object.entries(byStatus).map(([k, v]) => `${k} ${v}`).join(' · ')}`));
+        printSweepDecision(d, t);
+        console.error('');
+      }
+      return finishWith(exitCodeFor(d));
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      return finishWith(2);
+    }
+  });
+
+sweepCmd
+  .command('reduce')
+  .description('Close the run (unjudged batches become named gaps), merge findings, build the flow graph and chains')
+  .option('--dir <repo>', 'Repository root of the run', '.')
+  .option('--run <id>', 'Run id (default: latest)')
+  .option('--json', 'Machine-readable output')
+  .action((options) => {
+    try {
+      const { finalise, exitCodeFor } = require('../src/sweep/loop');
+      const { reduce } = require('../src/sweep/reduce');
+      const { t } = require('../src/lib/i18n');
+      const store = openSweepStore(options);
+      const d = finalise(store);
+      const r = reduce(store);
+      if (options.json) {
+        sweepJson({ run_id: store.runId, decision: d, findings: r.findings.length, chains: r.chains, pdpl: r.pdpl, coverage: r.coverage });
+      } else {
+        console.error(chalk.cyan(`\n${BRAND} — sweep reduce · ${store.runId}`));
+        printSweepDecision(d, t);
+        const sev = { P0: 0, P1: 0, P2: 0 };
+        for (const f of r.findings) sev[f.severity]++;
+        console.error(chalk.white(`   ${r.findings.length} finding(s) · P0 ${sev.P0} · P1 ${sev.P1} · P2 ${sev.P2} · ${r.chains.length} chain(s)`));
+        console.error(chalk.cyan(`   kakashi sweep report -f html -o sweep-report.html --dir ${options.dir}\n`));
+      }
+      return finishWith(exitCodeFor(d));
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      return finishWith(2);
+    }
+  });
+
+sweepCmd
+  .command('report')
+  .description('Render the sweep report: md | html (EN/AR) | json | sarif')
+  .option('--dir <repo>', 'Repository root of the run', '.')
+  .option('--run <id>', 'Run id (default: latest)')
+  .option('-f, --format <fmt>', 'md | html | json | sarif', 'md')
+  .option('-o, --output <path>', 'Write to path instead of stdout')
+  .option('--lang <lang>', 'Report language: en | ar', 'en')
+  .option('--include-values', 'Embed the matched source lines (NOT agent-safe — writes raw values into the report)')
+  .action((options) => {
+    try {
+      const { render } = require('../src/sweep/report');
+      if (!['md', 'html', 'json', 'sarif'].includes(options.format)) {
+        console.error(chalk.red(`Unsupported --format: ${options.format} (use md|html|json|sarif)`));
+        return finishWith(2);
+      }
+      if (options.includeValues) console.error(chalk.yellow('   [warn] --include-values: this report contains raw source lines. NOT agent-safe.'));
+      const out = render(openSweepStore(options), { format: options.format, lang: getLang(), includeValues: !!options.includeValues });
+      if (options.output) {
+        fs.writeFileSync(options.output, out);
+        console.error(chalk.green(`[ok] Report written: ${options.output}`));
+      } else {
+        process.stdout.write(out);
+      }
+      return finishWith(0);
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      return finishWith(2);
+    }
+  });
+
+const sweepSelectors = sweepCmd
+  .command('selectors')
+  .description('Inspect and validate Sweep selectors');
+
+sweepSelectors
+  .command('validate')
+  .description('Run every selector against its fixtures; print recall and precision (fails on any loss)')
+  .option('--pack <ids>', 'Comma-separated packs (default: all built-in packs)')
+  .option('--repo <dir>', 'Also validate <dir>/.kakashi/selectors')
+  .option('--json', 'Machine-readable output')
+  .action(async (options) => {
+    const { loadSelectors, listPacks } = require('../src/sweep/selectors/loader');
+    const { validateFixtures } = require('../src/sweep/selectors/validate');
+    const packs = options.pack ? options.pack.split(',').map((s) => s.trim()) : listPacks();
+    let loaded;
+    try {
+      loaded = loadSelectors({ packs, repoRoot: options.repo ? path.resolve(options.repo) : null });
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      return finishWith(2);
+    }
+    const { results, ok, degradations } = await validateFixtures(loaded.selectors, { origins: loaded.origins });
+    const schemaOk = loaded.errors.length === 0;
+    if (options.json) {
+      process.stdout.write(`${JSON.stringify({ ok: ok && schemaOk, schemaErrors: loaded.errors, degradations, results }, null, 2)}\n`);
+      return finishWith(ok && schemaOk ? 0 : 1);
+    }
+    console.error(chalk.cyan(`\n${BRAND} — sweep selectors validate (${packs.join(', ')})\n`));
+    for (const e of loaded.errors) console.error(chalk.red(`   [schema] ${e}`));
+    for (const d of degradations) console.error(chalk.yellow(`   [fallback] ${d.purpose} — ${d.install}`));
+    for (const r of results) {
+      const mark = r.pass ? chalk.green('ok  ') : chalk.red('FAIL');
+      console.error(`   ${mark} ${r.id.padEnd(42)} recall ${(r.recall * 100).toFixed(0).padStart(3)}%  precision ${(r.precision * 100).toFixed(0).padStart(3)}%`);
+      for (const f of r.failures) console.error(chalk.red(`          ${f}`));
+    }
+    console.error(`\n   ${results.filter((r) => r.pass).length}/${results.length} selectors pass\n`);
+    return finishWith(ok && schemaOk ? 0 : 1);
+  });
+
+sweepSelectors
+  .command('propose <file>')
+  .description('Add agent-proposed selectors (additive only; schema, fixtures and id collisions are checked)')
+  .option('--dir <repo>', 'Repository whose .kakashi/selectors receives accepted selectors', '.')
+  .option('--json', 'Machine-readable output')
+  .action(async (file, options) => {
+    try {
+      const { validateProposal } = require('../src/sweep/proposals');
+      const res = await validateProposal(path.resolve(file), { repoRoot: path.resolve(options.dir) });
+      if (options.json) {
+        process.stdout.write(`${JSON.stringify(res, null, 2)}\n`);
+      } else {
+        console.error(chalk.cyan(`\n${BRAND} — sweep selectors propose`));
+        for (const id of res.accepted) console.error(chalk.green(`   accepted ${id}`));
+        for (const r of res.rejected) console.error(chalk.red(`   rejected ${r.id || '(file)'}: ${r.reason}`));
+        if (res.file) console.error(chalk.gray(`   written: ${res.file}`));
+        console.error('');
+      }
+      return finishWith(res.rejected.length ? 1 : 0);
+    } catch (err) {
+      console.error(chalk.red(`Error: ${err.message}`));
+      return finishWith(2);
+    }
+  });
+
 program.parse(process.argv);
 
 if (!process.argv.slice(2).length) {

@@ -1,0 +1,112 @@
+# SQL columns that carry personal data, by class.
+- id: pii.sql.contact_columns
+  kind: sql_column
+  description: SQL reads, joins or exports email / phone / address columns
+  rationale: Contact handles are direct identifiers; every query touching them is a point where PII moves (PDPL Art. 15).
+  sensitivity_class: CONTACT
+  evidence_kind: read
+  languages: [sql, python]
+  query:
+    columns: [email, email_address, "*_email", phone, "phone_*", "*_phone", mobile, msisdn, address, street_address, home_address]
+  fixtures:
+    positive:
+      - path: models/stg_customers.sql
+        text: |
+          select customer_id, email, phone_number
+          from {{ source('crm', 'customers') }}
+    negative:
+      - "select count(*) as n_customers from customers"
+      - "select sha256(customer_id) as customer_key from customers"
+
+- id: pii.sql.government_id_columns
+  kind: sql_column
+  description: SQL touches national id / passport / visa / SSN columns
+  rationale: Government identifiers re-identify a person alone and carry the strictest handling rules.
+  sensitivity_class: GOVERNMENT_IDENTIFIER
+  evidence_kind: read
+  languages: [sql, python]
+  query:
+    columns: [national_id, emirates_id, eid, passport, passport_no, passport_number, visa_no, visa_number, ssn, iqama, unified_id]
+  fixtures:
+    positive:
+      - "select customer_id, national_id from customers"
+    negative:
+      - "select customer_id, country from customers"
+
+- id: pii.sql.financial_columns
+  kind: sql_column
+  description: SQL touches IBAN / card / account number columns
+  rationale: Account and card numbers are financial personal data; moving them is a fraud and breach vector.
+  sensitivity_class: FINANCIAL
+  evidence_kind: read
+  languages: [sql, python]
+  query:
+    columns: [iban, card_number, credit_card, cc_number, pan, account_number, bank_account]
+  fixtures:
+    positive:
+      - "select customer_id, iban from payments"
+    negative:
+      - "select sum(amount) as revenue from payments group by month"
+
+- id: pii.sql.person_name_columns
+  kind: sql_column
+  description: SQL touches person name columns
+  rationale: Names combined with any other attribute identify a data subject.
+  sensitivity_class: PERSON_NAME
+  evidence_kind: read
+  languages: [sql, python]
+  query:
+    columns: [first_name, last_name, full_name, customer_name, middle_name, given_name, family_name]
+  fixtures:
+    positive:
+      - "select first_name, last_name from customers"
+    negative:
+      - "select product_name, category from products"
+
+- id: pii.sql.quasi_identifier_columns
+  kind: sql_column
+  description: SQL touches date of birth / age / gender quasi-identifiers
+  rationale: Quasi-identifiers are jointly re-identifying (DOB + gender + postcode identifies most people).
+  sensitivity_class: QUASI_IDENTIFIER
+  evidence_kind: read
+  languages: [sql, python]
+  query:
+    columns: [dob, date_of_birth, birth_date, birthdate, age, gender, nationality]
+  fixtures:
+    positive:
+      - "select customer_id, date_of_birth from customers"
+    negative:
+      - "select order_id, order_date from orders"
+
+- id: pii.sql.select_star_pii
+  kind: sql_column
+  description: select * from a known PII table
+  rationale: select * silently carries every PII column, including ones added later.
+  sensitivity_class: CONTACT
+  evidence_kind: read
+  languages: [sql, python]
+  query:
+    columns: []
+    contexts: [select_star]
+    pii_tables: [customers, raw_customers, stg_customers, dim_customers, users, employees, crm.customers]
+  fixtures:
+    positive:
+      - "select * from customers"
+    negative:
+      - "select * from orders_daily_summary"
+
+- id: pii.sql.export_statements
+  kind: sql_column
+  description: COPY / UNLOAD statements that export PII columns out of the warehouse
+  rationale: Bulk export to object storage is the highest-volume PII egress path.
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [sql, python]
+  query:
+    columns: [email, "*_email", phone, "*_phone", national_id, emirates_id, passport_number, iban, first_name, last_name, full_name, date_of_birth]
+    contexts: [copy, unload]
+  fixtures:
+    positive:
+      - "unload ('select email, phone from customers') to 's3://example-bucket/out/' iam_role 'arn:aws:iam::000000000000:role/x';"
+    negative:
+      - "select email from customers"

@@ -1,0 +1,51 @@
+version: 2
+
+sources:
+  - name: crm
+    description: CRM replica (synthetic)
+    tags: [pii]
+    tables:
+      - name: customers
+        columns:
+          - name: customer_id
+          - name: email
+            meta:
+              pii: true
+          - name: phone_number
+            meta:
+              pii: true
+          - name: national_id
+            meta:
+              pii: true
+  - name: shop
+    description: Order events, no personal data
+    tables:
+      - name: orders
+  - name: finance
+    description: Payout ledger (synthetic)
+    tags: [pii]
+    tables:
+      - name: payouts
+
+models:
+  - name: dim_customers
+    columns:
+      - name: email
+        meta:
+          pii: true
+
+exposures:
+  - name: crm_partner_export
+    type: application
+    description: Nightly contact export shipped to the CRM partner
+    owner:
+      name: growth team
+    depends_on:
+      - ref('customer_contact_export')
+  - name: revenue_dashboard
+    type: dashboard
+    description: Daily revenue dashboard, aggregates only
+    owner:
+      name: finance team
+    depends_on:
+      - ref('revenue_daily')

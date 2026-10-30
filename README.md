@@ -35,15 +35,23 @@ Nothing is uploaded. No daemon. No cloud. **Zero network calls.**
 
 ## What Kakashi is
 
-Kakashi started as a masker you invoke. As of **v1.3.1 it has three protection layers and a smart orchestrator**, and you can use any layer on its own or let `/kakashi` choose the right one from your intent.
+Kakashi started as a masker you invoke. As of **v1.4.0 it has four protection layers and a smart orchestrator**, and you can use any layer on its own or let `/kakashi` choose the right one from your intent.
 
 | Layer | What it does | Commands |
 | --- | --- | --- |
 | **1 · The engine** | 35 detection patterns (credentials, government IDs, financial, contact, names) across 50+ file formats. Finds a secret, replaces it, and rebuilds the file in its original format — a real `.docx` back, not a text dump. | `scan` `mask` `audit` |
 | **2 · The reach** | The same engine pointed at things bigger than one file: a whole repository or shared drive, and live databases queried and masked **client-side**. | `scan-dir` `mask-dir` `db-scan` `db-mask` `db-audit` |
 | **3 · The Guardian** | Guardrails. You hand it a file, the agent asking for it, and what that agent says it needs it for. It observes, assesses risk, plans the *minimum necessary* protection, acts, **re-checks its own output**, and replans if the result is still unsafe. It returns a decision, not just a file. | `guard` `agent-guard` |
+| **4 · Sweep** | Repository data-flow audit: *where does customer data go?* A deterministic orchestrator plans selectors over SQL, dbt, Python, notebooks and Airflow, hands **guarded views** to your agent as a bounded judge, verifies every answer, and reduces them to PII source → sink chains with PDPL articles. | `sweep` |
 
 ```
+        ┌──────────── layer 4 · SWEEP ───────────────┐
+        │  observe → task → plan selectors → policy  │
+        │  → act (guarded views) → map (agent) →     │
+        │  verify → replan → reduce  ⇒  COMPLETE /   │
+        │                     PARTIAL / BLOCKED      │
+        └────────────────────┬───────────────────────┘
+                             │ uses
         ┌──────────── layer 3 · GUARDIAN ────────────┐
         │  goal → observe → understand task →        │
         │  assess → plan → policy → act → verify →   │
@@ -65,6 +73,28 @@ Kakashi started as a masker you invoke. As of **v1.3.1 it has three protection l
 ```
 
 **In one sentence:** Kakashi is what stands between the file on your disk and the model on someone else's server.
+
+---
+
+## Layer 4 · Sweep — where does customer data go?
+
+`kakashi sweep` audits a whole repository for personal-data flow: SQL columns, dbt lineage and exposures, pandas / Spark writes, logging, HTTP / S3 / SMTP egress, Airflow transfers and hardcoded values. **Kakashi orchestrates; the LLM only judges.**
+
+```bash
+kakashi sweep . --task "audit where customer data goes" --agent claude --destination external_model --json
+kakashi sweep next            # → one batch: signal ids + paths of GUARDED views
+kakashi sweep submit <batch_id> findings.json   # verified: schema, exactly-once, value re-scan, edges
+kakashi sweep reduce && kakashi sweep report -f md -o kakashi-sweep.md   # also html | json | sarif
+```
+
+- **Deterministic loop:** OBSERVE fingerprint → UNDERSTAND TASK → PLAN selectors → POLICY (coverage can never be weakened) → ACT (shard, batch, Guardian-guarded views) → MAP (your agent, via `next` / `submit`) → VERIFY → REPLAN (`--max-iterations 4`) → REDUCE (dedupe, flow graph, chains, PDPL, CODEOWNERS) → **COMPLETE / PARTIAL / BLOCKED**, logged value-free to `~/.kakashi/guardian-audit.jsonl`.
+- **Workers never see raw PII** — only guarded code. `--destination local_model` for an offline local LLM. Zero network.
+- **Selectors as code** in `.kakashi/selectors/*.yaml` (`pattern`, `sql_column`, `dbt_graph`, `ast`, `regex`), each with fixtures. Packs: `pii_flow_audit` (always-on floor), `external_export_audit`, `logging_leak_audit`, `schema_change_impact` (stub).
+- **Incremental PRs** with `--since origin/main`; [GitHub Action example](docs/examples/sweep-pr.yml). Exit codes: 0 COMPLETE, 1 PARTIAL, 2 error, 3 REQUIRE_APPROVAL, 4 BLOCKED.
+- Optional parsers (`node-sql-parser`, `web-tree-sitter` + `tree-sitter-python`) are used if installed; otherwise regex fallback, reported in the coverage section.
+- Try it without an LLM: `node demos/sweep-mock-worker.js demos/sweep-bench`.
+
+In an agent, just say *"audit where customer data goes in this repo"* or type `/kakashi-sweep`. Full guide: [docs/SWEEP.md](docs/SWEEP.md) · design rationale: [ADR 0001](docs/adr/0001-kakashi-orchestrates-llm-judges.md).
 
 ---
 
@@ -549,6 +579,7 @@ The same split runs through every layer: `scan`, `db-scan` and `guard --json` ar
 | `/kakashi-mask /full/path/to/file.py` (path string, **recommended**) | No — only the path | No |
 | `/kakashi-mask @file.py` (`@`-mention) | **Yes** — the agent attaches the file before Kakashi runs | No, if you share `masked_file.py` |
 | `kakashi guard file.py --json` | No — classes and counts only | No |
+| `kakashi sweep` → `next` / `submit` | Guarded **code** only — never raw values | No |
 | `kakashi mask file.py` in a plain terminal (no agent) | Not applicable — no agent involved | No |
 | You forget Kakashi entirely and paste raw `.env` to ChatGPT | — | **Yes — the leak Kakashi exists to prevent** |
 
@@ -800,6 +831,7 @@ There are plenty of secret scanners and PII libraries. None of them sit *inside*
 | Google DLP / Azure PII | No | No — cloud | Yes | No | No | No |
 | Skyflow / PrivateAI | No | No — cloud | Yes | partial | No | No |
 | `redact-pii` (npm) | No | Yes | partial | No | No | Yes |
+| Agentic security scanners (LLM-driven repo audit) | partial | No — source sent to model | No — detect only | No | LLM decides its own scope | partial |
 | MCP / Claude rules | Yes, but DIY | Yes | No — no engine | No | No | No |
 
 **Kakashi is genuinely the only option:**
@@ -808,7 +840,8 @@ There are plenty of secret scanners and PII libraries. None of them sit *inside*
 - The only one that **masks `.docx`, `.xlsx`, `.pptx` while reconstructing the original format** — you get a real Word/Excel file back.
 - The only one that applies the same engine to **files, folders and live databases**, all client-side.
 - The only one that makes an **autonomous, auditable release decision** about the data an agent asked for — and verifies its own output before releasing it.
-- 100% local. **Zero network calls** during scan/mask/guard. No telemetry.
+- Unlike agentic security scanners, **Sweep** keeps a deterministic, auditable orchestrator in charge: bounded LLM workers, every answer verified, and workers never see raw PII.
+- 100% local. **Zero network calls** during scan/mask/guard/sweep. No telemetry.
 
 GitLeaks and TruffleHog only catch leaks that already made it into git. Presidio is great, but you build all the agent integration yourself. Cloud DLP services defeat the purpose by sending the data they're meant to protect to a third party. Kakashi is designed for the *moment of leak* — the millisecond between an agent reading a file and shipping it to an external model.
 

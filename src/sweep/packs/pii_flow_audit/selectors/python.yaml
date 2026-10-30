@@ -1,0 +1,126 @@
+- id: pii.py.log_records
+  kind: ast
+  description: Logging or printing dataframes / customer records
+  rationale: Logs are copied to aggregators with broad access and long retention; record-level PII in logs is an uncontrolled disclosure.
+  sensitivity_class: CONTACT
+  evidence_kind: log
+  languages: [python, notebook]
+  query:
+    matcher: log_call
+  fixtures:
+    positive:
+      - |
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(customers_df.head())
+      - |
+        print(df.head())
+    negative:
+      - |
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("job finished")
+      - |
+        print("rows written")
+
+- id: pii.py.df_write
+  kind: ast
+  description: pandas / Spark dataframe written to a file, table or bucket
+  rationale: Dataframe writes create new copies of personal data outside the governed warehouse.
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [python, notebook]
+  query:
+    matcher: df_write
+  fixtures:
+    positive:
+      - |
+        df.to_csv("s3://example-bucket/customers.csv", index=False)
+      - |
+        sdf.write.mode("overwrite").parquet("s3://example-bucket/out/")
+    negative:
+      - |
+        df = pd.read_csv("input.csv")
+        n = len(df)
+
+- id: pii.py.http_send
+  kind: ast
+  description: Records sent to an HTTP endpoint via requests / httpx
+  rationale: Posting records to a third-party API is a cross-border / third-party transfer that needs a basis (PDPL Art. 22-23).
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [python, notebook]
+  query:
+    matcher: http_send
+  fixtures:
+    positive:
+      - |
+        import requests
+        requests.post("https://api.example.com/contacts", json=records)
+    negative:
+      - |
+        import requests
+        r = requests.get("https://api.example.com/health")
+
+- id: pii.py.cloud_upload
+  kind: ast
+  description: Files or objects uploaded to S3 / GCS
+  rationale: Object storage uploads move data outside warehouse access controls.
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [python, notebook]
+  query:
+    matcher: cloud_upload
+  fixtures:
+    positive:
+      - |
+        import boto3
+        s3 = boto3.client("s3")
+        s3.upload_file("customers.csv", "example-bucket", "exports/customers.csv")
+    negative:
+      - |
+        import boto3
+        s3 = boto3.client("s3")
+        s3.list_objects_v2(Bucket="example-bucket")
+
+- id: pii.py.smtp_send
+  kind: ast
+  description: Data sent by email through smtplib
+  rationale: Email attachments are an untracked copy of the data at every recipient.
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [python, notebook]
+  query:
+    matcher: smtp_send
+  fixtures:
+    positive:
+      - |
+        import smtplib
+        with smtplib.SMTP("localhost") as s:
+            s.send_message(msg)
+    negative:
+      - |
+        import smtplib
+        s = smtplib.SMTP("localhost")
+        s.quit()
+
+- id: pii.py.db_read
+  kind: ast
+  description: Python reading from a database or Spark table
+  rationale: Database reads are the source end of a PII flow; paired with a sink in the same file they form a chain.
+  sensitivity_class: CONTACT
+  evidence_kind: read
+  languages: [python, notebook]
+  query:
+    matcher: db_read
+  fixtures:
+    positive:
+      - |
+        import pandas as pd
+        df = pd.read_sql("select * from customers", conn)
+      - |
+        sdf = spark.sql("select email from customers")
+    negative:
+      - |
+        import pandas as pd
+        df = pd.read_csv("local.csv")

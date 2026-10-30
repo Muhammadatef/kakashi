@@ -1,0 +1,24 @@
+- id: pii.airflow.transfer
+  kind: ast
+  description: Airflow operators and hooks that move data to S3 / GCS / SFTP / HTTP / email
+  rationale: Scheduled transfers move data out repeatedly and unattended; each is a recurring disclosure.
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [python]
+  query:
+    matcher: airflow_transfer
+  fixtures:
+    positive:
+      - path: dags/export.py
+        text: |
+          from airflow.providers.amazon.aws.transfers.sql_to_s3 import SqlToS3Operator
+          t = SqlToS3Operator(task_id="x", query="select * from t", s3_bucket="example-bucket", s3_key="k")
+      - path: dags/mail.py
+        text: |
+          from airflow.operators.email import EmailOperator
+          m = EmailOperator(task_id="mail", to="team", subject="report", html_content="hi")
+    negative:
+      - path: dags/noop.py
+        text: |
+          from airflow.operators.empty import EmptyOperator
+          t = EmptyOperator(task_id="start")

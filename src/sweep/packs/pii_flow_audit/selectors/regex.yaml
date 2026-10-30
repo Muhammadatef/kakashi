@@ -1,0 +1,34 @@
+- id: pii.regex.to_csv_s3
+  kind: regex
+  description: Lexical fallback for dataframe writes straight to an s3:// path
+  rationale: Catches writes the AST matcher may miss (notebooks, odd wrappers); a direct bucket write is an export of whatever the frame holds.
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [python, notebook]
+  query:
+    pattern: '\.to_(csv|parquet|json|excel)\(\s*f?["'']s3://'
+  fixtures:
+    positive:
+      - path: job.py
+        text: 'df.to_csv("s3://example-bucket/out.csv")'
+    negative:
+      - path: job.py
+        text: 'df.to_csv("/tmp/out.csv")'
+
+- id: pii.regex.unload_to_s3
+  kind: regex
+  description: Lexical fallback for UNLOAD ... TO 's3://' and COPY INTO 's3://'
+  rationale: Warehouse unloads are bulk egress; caught lexically even when SQL parsing fails.
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [sql, python]
+  query:
+    pattern: '(\bunload\b.*\bto|\bcopy\s+into|^\s*to)\s+''s3://'
+    flags: i
+  fixtures:
+    positive:
+      - path: export.sql
+        text: "unload ('select email from customers') to 's3://example-bucket/x/'"
+    negative:
+      - path: export.sql
+        text: "select email from customers"

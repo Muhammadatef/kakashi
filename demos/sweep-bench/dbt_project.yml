@@ -1,0 +1,5 @@
+name: sweep_bench
+version: "1.0.0"
+config-version: 2
+profile: sweep_bench
+model-paths: ["models"]

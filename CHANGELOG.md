@@ -6,6 +6,51 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.4.0] — 2026-10-31
+
+**Layer 4 · Sweep.** A deterministic, auditable repository data-flow audit
+("where does customer data go?"). Kakashi orchestrates; the host LLM only
+judges Guardian-guarded views and every judgement is verified.
+
+### Added
+
+- **`kakashi sweep`** — OBSERVE (fingerprint) → UNDERSTAND TASK → PLAN
+  selectors → POLICY (`assertCoverageNonWeakening`) → ACT (shard, batch,
+  guarded views) → MAP (host agent via `sweep next` / `sweep submit`) →
+  VERIFY (schema, exactly-once, value re-scan, edges) → REPLAN (reissue /
+  split / escalate, `--max-iterations 4`) → REDUCE (dedupe, flow graph,
+  chains, PDPL, CODEOWNERS) → COMPLETE / PARTIAL / BLOCKED, logged
+  value-free to `~/.kakashi/guardian-audit.jsonl`. Exit codes 0 / 1 / 2 /
+  3 / 4. `--destination local_model` for offline local LLMs; `--since
+  <ref>` incremental mode.
+- **CLI:** `sweep`, `sweep next`, `sweep submit`, `sweep status`,
+  `sweep reduce`, `sweep report`, `sweep selectors validate`,
+  `sweep selectors propose`.
+- **Selectors as code** (`.kakashi/selectors/*.yaml`, strict YAML subset)
+  with kinds `pattern`, `sql_column`, `dbt_graph`, `ast`, `regex` and
+  mandatory positive/negative fixtures.
+- **Packs:** `pii_flow_audit` (always-on floor), `external_export_audit`,
+  `logging_leak_audit`, `schema_change_impact` (stub).
+- **Reports:** Markdown, HTML (EN / AR, RTL), JSON and SARIF 2.1.0, with
+  Mermaid flow charts, PDPL articles and remediation.
+- **Mock worker** `demos/sweep-mock-worker.js` (full loop, no LLM) and the
+  seeded **bench** `demos/sweep-bench`.
+- **`/kakashi-sweep`** slash command; sweep dispatch rows in every agent
+  rule (`/kakashi`, always-on rule, AGENTS.md, CLAUDE.md) and installer.
+- **Docs:** [docs/SWEEP.md](docs/SWEEP.md),
+  [ADR 0001](docs/adr/0001-kakashi-orchestrates-llm-judges.md),
+  [docs/examples/sweep-pr.yml](docs/examples/sweep-pr.yml).
+
+### Notes
+
+- **No new required dependency.** `node-sql-parser`, `web-tree-sitter` and
+  `tree-sitter-python` are optional; when absent every selector kind falls
+  back to regex and the degradation is reported. They are not installed by
+  default: `npm install node-sql-parser web-tree-sitter tree-sitter-python`
+  next to Kakashi to enable parser-backed precision.
+
+---
+
 ## [1.3.1] — 2026-09-23
 
 **Bug-fix release.** Closes the "`Unrecognized command '/Kakashi'`" gap on

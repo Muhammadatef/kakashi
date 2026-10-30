@@ -1,0 +1,56 @@
+# Hardcoded sensitive VALUES in code and config, found by the engine patterns.
+- id: pii.values.contact
+  kind: pattern
+  description: Hardcoded email address or phone number in code or config
+  rationale: A literal contact handle in a repo is personal data at rest outside any governed store (PDPL Art. 15) and leaks with every clone.
+  sensitivity_class: CONTACT
+  evidence_kind: value
+  query:
+    pattern_ids: [email, phone, intl_phone]
+  fixtures:
+    positive:
+      - 'ALERT_TO = "test.user@example.com"'
+    negative:
+      - 'ALERT_TO = os.environ["ALERT_TO"]'
+
+- id: pii.values.government_id
+  kind: pattern
+  description: Hardcoded national id, passport, visa or SSN value
+  rationale: Government identifiers re-identify a person on their own; they must never live in source.
+  sensitivity_class: GOVERNMENT_IDENTIFIER
+  evidence_kind: value
+  query:
+    pattern_ids: [national_id, passport, visa_id, unified_id, ssn]
+  fixtures:
+    positive:
+      - 'TEST_EID = "784-1990-1234567-1"'
+    negative:
+      - 'TEST_EID = load_fixture("eid")'
+
+- id: pii.values.financial
+  kind: pattern
+  description: Hardcoded IBAN or payment card number
+  rationale: Financial instruments in source enable fraud and are high-severity personal data.
+  sensitivity_class: FINANCIAL
+  evidence_kind: value
+  query:
+    pattern_ids: [uae_iban, cc]
+  fixtures:
+    positive:
+      - 'IBAN = "AE070331234567890123456"'
+    negative:
+      - 'IBAN = row["iban"]'
+
+- id: pii.values.credential
+  kind: pattern
+  description: Hardcoded API key, token, private key or database connection string
+  rationale: A live credential in a pipeline repo grants access to every PII store it reaches.
+  sensitivity_class: CREDENTIAL
+  evidence_kind: value
+  query:
+    pattern_ids: [jwt, ssh_key, aws_key, openai_key, anthropic, hf_token, gh_token, slack, stripe, bearer, db_conn, databricks_token]
+  fixtures:
+    positive:
+      - 'OPENAI = "sk-proj-FAKEKEYFORTESTS0nlyNotARealKey000000"'
+    negative:
+      - 'OPENAI = os.environ.get("OPENAI_API_KEY")'

@@ -1,0 +1,394 @@
+{
+  "seeded_signals": [
+    {
+      "file": "dags/export_customers_to_s3.py",
+      "line": 13,
+      "selector_id": "pii.airflow.transfer",
+      "evidence_kind": "export"
+    },
+    {
+      "file": "dags/weekly_customer_report.py",
+      "line": 14,
+      "selector_id": "pii.airflow.transfer",
+      "evidence_kind": "export"
+    },
+    {
+      "file": "finance/reconcile.py",
+      "line": 9,
+      "selector_id": "pii.py.db_read",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "finance/reconcile.py",
+      "line": 10,
+      "selector_id": "pii.sql.financial_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "finance/reconcile.py",
+      "line": 10,
+      "selector_id": "pii.sql.person_name_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "finance/reconcile.py",
+      "line": 17,
+      "selector_id": "pii.py.smtp_send",
+      "evidence_kind": "export"
+    },
+    {
+      "file": "finance/sql/payout_export.sql",
+      "line": 2,
+      "selector_id": "pii.sql.export_statements",
+      "evidence_kind": "export"
+    },
+    {
+      "file": "finance/sql/payout_export.sql",
+      "line": 2,
+      "selector_id": "pii.sql.financial_columns",
+      "evidence_kind": "export"
+    },
+    {
+      "file": "finance/sql/payout_export.sql",
+      "line": 2,
+      "selector_id": "pii.sql.person_name_columns",
+      "evidence_kind": "export"
+    },
+    {
+      "file": "finance/sql/payout_export.sql",
+      "line": 3,
+      "selector_id": "pii.regex.unload_to_s3",
+      "evidence_kind": "export"
+    },
+    {
+      "file": "models/marts/customer_contact_export.sql",
+      "line": 5,
+      "selector_id": "pii.sql.contact_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/marts/customer_contact_export.sql",
+      "line": 6,
+      "selector_id": "pii.sql.contact_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/marts/customer_contact_export.sql",
+      "line": 7,
+      "selector_id": "pii.dbt.pii_lineage",
+      "evidence_kind": "transform"
+    },
+    {
+      "file": "models/marts/dim_customers.sql",
+      "line": 5,
+      "selector_id": "pii.sql.person_name_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/marts/dim_customers.sql",
+      "line": 6,
+      "selector_id": "pii.sql.person_name_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/marts/dim_customers.sql",
+      "line": 7,
+      "selector_id": "pii.sql.contact_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/marts/dim_customers.sql",
+      "line": 8,
+      "selector_id": "pii.sql.contact_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/marts/dim_customers.sql",
+      "line": 10,
+      "selector_id": "pii.dbt.pii_lineage",
+      "evidence_kind": "transform"
+    },
+    {
+      "file": "models/schema.yml",
+      "line": 8,
+      "selector_id": "pii.dbt.pii_lineage",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/schema.yml",
+      "line": 28,
+      "selector_id": "pii.dbt.pii_lineage",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/schema.yml",
+      "line": 38,
+      "selector_id": "pii.dbt.pii_exposure",
+      "evidence_kind": "expose"
+    },
+    {
+      "file": "models/staging/stg_customers.sql",
+      "line": 5,
+      "selector_id": "pii.sql.person_name_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/staging/stg_customers.sql",
+      "line": 6,
+      "selector_id": "pii.sql.person_name_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/staging/stg_customers.sql",
+      "line": 7,
+      "selector_id": "pii.sql.contact_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/staging/stg_customers.sql",
+      "line": 8,
+      "selector_id": "pii.sql.contact_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/staging/stg_customers.sql",
+      "line": 9,
+      "selector_id": "pii.sql.government_id_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/staging/stg_customers.sql",
+      "line": 10,
+      "selector_id": "pii.sql.quasi_identifier_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/staging/stg_customers.sql",
+      "line": 12,
+      "selector_id": "pii.dbt.pii_lineage",
+      "evidence_kind": "transform"
+    },
+    {
+      "file": "models/staging/stg_payouts.sql",
+      "line": 4,
+      "selector_id": "pii.sql.financial_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "models/staging/stg_payouts.sql",
+      "line": 7,
+      "selector_id": "pii.dbt.pii_lineage",
+      "evidence_kind": "transform"
+    },
+    {
+      "file": "python/config.py",
+      "line": 4,
+      "selector_id": "pii.values.contact",
+      "evidence_kind": "value"
+    },
+    {
+      "file": "python/config.py",
+      "line": 5,
+      "selector_id": "pii.values.credential",
+      "evidence_kind": "value"
+    },
+    {
+      "file": "python/debug_customers.py",
+      "line": 11,
+      "selector_id": "pii.py.log_records",
+      "evidence_kind": "log"
+    },
+    {
+      "file": "python/debug_customers.py",
+      "line": 12,
+      "selector_id": "pii.py.log_records",
+      "evidence_kind": "log"
+    },
+    {
+      "file": "python/export_customers.py",
+      "line": 9,
+      "selector_id": "pii.py.db_read",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "python/export_customers.py",
+      "line": 10,
+      "selector_id": "pii.sql.contact_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "python/export_customers.py",
+      "line": 14,
+      "selector_id": "pii.py.df_write",
+      "evidence_kind": "export"
+    },
+    {
+      "file": "python/export_customers.py",
+      "line": 14,
+      "selector_id": "pii.regex.to_csv_s3",
+      "evidence_kind": "export"
+    },
+    {
+      "file": "python/spark_profile.py",
+      "line": 6,
+      "selector_id": "pii.py.db_read",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "python/spark_profile.py",
+      "line": 7,
+      "selector_id": "pii.sql.person_name_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "python/spark_profile.py",
+      "line": 7,
+      "selector_id": "pii.sql.quasi_identifier_columns",
+      "evidence_kind": "read"
+    },
+    {
+      "file": "python/spark_profile.py",
+      "line": 10,
+      "selector_id": "pii.py.df_write",
+      "evidence_kind": "export"
+    },
+    {
+      "file": "python/sync_crm.py",
+      "line": 9,
+      "selector_id": "pii.py.http_send",
+      "evidence_kind": "export"
+    }
+  ],
+  "chains": [
+    {
+      "id": "dbt_contact_exposure",
+      "path": [
+        "models/schema.yml",
+        "models/staging/stg_customers.sql",
+        "models/marts/dim_customers.sql",
+        "models/marts/customer_contact_export.sql",
+        "models/schema.yml"
+      ],
+      "source": "crm.customers (tag pii)",
+      "sink": "exposure crm_partner_export (partner application)",
+      "severity": "P0"
+    },
+    {
+      "id": "airflow_contacts_to_s3",
+      "path": [
+        "models/marts/customer_contact_export.sql",
+        "dags/export_customers_to_s3.py"
+      ],
+      "source": "customer_contact_export",
+      "sink": "S3 example-partner-bucket",
+      "severity": "P0"
+    },
+    {
+      "id": "airflow_report_email",
+      "path": [
+        "dags/weekly_customer_report.py"
+      ],
+      "source": "new customers CSV",
+      "sink": "EmailOperator",
+      "severity": "P1"
+    },
+    {
+      "id": "pandas_contacts_to_s3",
+      "path": [
+        "python/export_customers.py"
+      ],
+      "source": "analytics.dim_customers (email, phone)",
+      "sink": "to_csv s3://",
+      "severity": "P0"
+    },
+    {
+      "id": "log_customer_frame",
+      "path": [
+        "python/debug_customers.py"
+      ],
+      "source": "customers_df",
+      "sink": "logger.info / print",
+      "severity": "P1"
+    },
+    {
+      "id": "http_push_crm",
+      "path": [
+        "python/sync_crm.py"
+      ],
+      "source": "customers_df records (email, phone)",
+      "sink": "requests.post third-party API",
+      "severity": "P0"
+    },
+    {
+      "id": "spark_profile_to_s3",
+      "path": [
+        "python/spark_profile.py"
+      ],
+      "source": "stg_customers (names, DOB)",
+      "sink": "parquet on s3://",
+      "severity": "P1"
+    },
+    {
+      "id": "finance_payout_unload",
+      "path": [
+        "models/schema.yml",
+        "finance/sql/payout_export.sql"
+      ],
+      "source": "finance.payouts (names, IBAN)",
+      "sink": "UNLOAD to s3://",
+      "severity": "P0"
+    },
+    {
+      "id": "finance_exceptions_email",
+      "path": [
+        "finance/reconcile.py"
+      ],
+      "source": "finance.payouts (full_name, IBAN)",
+      "sink": "smtplib send_message",
+      "severity": "P1"
+    },
+    {
+      "id": "hardcoded_values",
+      "path": [
+        "python/config.py"
+      ],
+      "source": "hardcoded synthetic email + fake API key",
+      "sink": "source control",
+      "severity": "P2"
+    }
+  ],
+  "decoys": [
+    {
+      "file": "models/marts/dim_customers_hashed.sql",
+      "why": "downstream of a pii source but emits only a SHA-256 key; a lineage signal is expected, a finding is not"
+    },
+    {
+      "file": "models/marts/revenue_daily.sql",
+      "why": "aggregate of non-PII orders"
+    },
+    {
+      "file": "models/staging/stg_orders.sql",
+      "why": "non-PII source"
+    },
+    {
+      "file": "finance/revenue_summary.sql",
+      "why": "aggregates only (count/sum by month)"
+    },
+    {
+      "file": "dags/revenue_rollup.py",
+      "why": "runs dbt; no transfer operator"
+    },
+    {
+      "file": "python/count_rows.py",
+      "why": "plain-string logs; writes counts only"
+    },
+    {
+      "file": "python/hash_ids.py",
+      "why": "hashes ids locally; plain-string log"
+    },
+    {
+      "file": "finance/README.md",
+      "why": "prompt-injection text only; must be ignored, not obeyed"
+    }
+  ]
+}

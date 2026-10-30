@@ -1,0 +1,60 @@
+- id: export.regex.object_storage_write
+  kind: regex
+  description: Writes, uploads or puts to an s3 / gs / abfss / sftp URI
+  rationale: A write to an external object store or SFTP endpoint is an export; whatever the frame or file holds leaves the estate and needs a recipient and lawful-basis record.
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [python, notebook, sql, javascript, scala, shell]
+  query:
+    pattern: "(to_csv|to_parquet|to_json|to_excel|write|save|put|upload|unload|copy|cp|sync)\\b.*(s3a?|gs|abfss?|wasbs?|sftp)://"
+    flags: i
+  fixtures:
+    positive:
+      - path: jobs/export.py
+        text: |
+          df.to_parquet("s3://example-bucket/customers/part.parquet")
+      - path: scripts/push.sh
+        text: |
+          aws s3 cp out.csv s3://example-bucket/out.csv
+    negative:
+      - path: jobs/read.py
+        text: |
+          df = pd.read_parquet("s3://example-bucket/customers/part.parquet")
+
+- id: export.regex.webhook_endpoint
+  kind: regex
+  description: Requests sent to webhook / chat-ops endpoints (Slack, Teams, generic webhooks)
+  rationale: Webhook payloads land in third-party SaaS with its own retention; any record content posted there is a disclosure to a processor.
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [python, notebook, javascript]
+  query:
+    pattern: "(hooks\\.slack\\.com|webhook\\.office\\.com|/webhooks?/|webhook_url|WEBHOOK_URL)"
+  fixtures:
+    positive:
+      - path: alerts/notify.py
+        text: |
+          requests.post(WEBHOOK_URL, json={"rows": rows})
+      - path: alerts/notify.js
+        text: |
+          await fetch("https://hooks.slack.com/services/T000/B000/XXXX", { method: "POST", body });
+    negative:
+      - path: alerts/notify.py
+        text: |
+          requests.get("https://status.example.com/health")
+
+- id: export.sql.bulk_export_any_column
+  kind: sql_column
+  description: Any column named in a COPY or UNLOAD statement
+  rationale: Bulk exports move whole columns out of the warehouse; the floor flags known PII names, this flags every column so new or renamed ones are not missed.
+  sensitivity_class: CONTACT
+  evidence_kind: export
+  languages: [sql, python]
+  query:
+    columns: ["*"]
+    contexts: [copy, unload]
+  fixtures:
+    positive:
+      - "unload ('select customer_ref, segment from crm.accounts') to 's3://example-bucket/x' iam_role 'r';"
+    negative:
+      - "select customer_ref, segment from crm.accounts"

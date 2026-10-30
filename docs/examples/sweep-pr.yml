@@ -1,0 +1,69 @@
+# Kakashi Sweep on pull requests (Layer 4).
+#
+# CI has no host agent, so the MAP stage is skipped and the decision is
+# PARTIAL with gap `map_skipped` (exit 1) -- that is expected, not a failure.
+#
+# The gate is deterministic: SHARD + dbt lineage still find every path from a
+# PII-tagged source to an external sink or exposure. A chain no worker has
+# judged is reported as P0 (`judged: false`) -- fail closed. The job sweeps the
+# base branch and the PR head and fails only on P0 chains that are NEW in the
+# head (chain ids are a stable hash of the path), so existing, accepted flows
+# do not block every PR.
+#
+# Map (the LLM judgment) runs in the developer's own agent: `/kakashi-sweep`.
+name: kakashi-sweep
+on:
+  pull_request:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # --since and the base worktree need history
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Kakashi
+        run: npm install -g @muhammadatef/kakashi@1.4.0
+
+      - name: Sweep base and head (shard + verify; map skipped)
+        run: |
+          git worktree add ../base "origin/${{ github.base_ref }}"
+          for tree in ../base .; do
+            ( cd "$tree"
+              set +e
+              kakashi sweep . --task "audit where customer data flows" \
+                --agent ci --destination local_model --json > /dev/null
+              code=$?
+              set -e
+              # 0 COMPLETE, 1 PARTIAL/IN_PROGRESS are expected; 2/3/4 fail the job.
+              if [ "$code" -gt 1 ]; then exit "$code"; fi
+              kakashi sweep reduce > /dev/null || true
+              kakashi sweep report -f json -o sweep-report.json )
+          done
+          kakashi sweep report -f sarif -o sweep.sarif
+
+      - name: Fail on new P0 chains
+        run: |
+          jq -r '[.chains[]? | select(.severity == "P0") | .id] | sort | .[]' ../base/sweep-report.json > base-p0.txt
+          jq -r '[.chains[]? | select(.severity == "P0") | .id] | sort | .[]' sweep-report.json > head-p0.txt
+          new=$(comm -13 base-p0.txt head-p0.txt)
+          if [ -n "$new" ]; then
+            echo "New P0 data-flow chains introduced by this PR:"
+            jq -r --argjson ids "$(printf '%s\n' $new | jq -R . | jq -s .)" \
+              '.chains[] | select(.id as $i | $ids | index($i)) | "  \(.source) -> \(.sink)"' sweep-report.json
+            exit 1
+          fi
+          echo "No new P0 chains."
+
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: sweep.sarif

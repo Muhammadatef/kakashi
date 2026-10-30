@@ -316,6 +316,40 @@ function runOrchestratorTests() {
     });
   }
 
+  // 7. v1.4.0 Layer 4 Sweep: every rule file must route data-flow audit
+  // intents to `kakashi sweep` and list the /kakashi-sweep slash command.
+  const SWEEP_INTENTS = ['where customer data goes', 'data-flow audit', 'where does PII flow', 'PDPL data lineage'];
+  for (const [label, body] of ALL_RULE_FILES) {
+    check(`${label} routes data-flow audit intents to \`sweep\``, () => {
+      const rows = body.split('\n').filter((line) => line.startsWith('|'));
+      const row = rows.find((line) => SWEEP_INTENTS.every((i) => line.includes(i)));
+      assert(row, `${label} has no dispatch row naming all sweep intents`);
+      assert(/kakashi sweep/.test(row), `${label} sweep row does not run \`kakashi sweep\``);
+      assert(/sweep next/.test(row) && /sweep submit/.test(row),
+        `${label} sweep row does not teach the next/submit worker loop`);
+    });
+    check(`${label} lists /kakashi-sweep and the Layer 4 Sweep brief`, () => {
+      assert(body.includes('/kakashi-sweep'), `${label} is missing /kakashi-sweep`);
+      assert(body.includes('Layer 4 Sweep'), `${label} brief is missing "Layer 4 Sweep"`);
+    });
+  }
+
+  check('kakashi-sweep is in SLASH_CMDS and its command file teaches guarded views only', () => {
+    assert(parseSlashCmdIds().includes('kakashi-sweep'), 'SLASH_CMDS is missing kakashi-sweep');
+    const body = fs.readFileSync(path.join(ROOT, 'commands', 'kakashi-sweep.md'), 'utf8');
+    for (const marker of ['sweep next', 'sweep submit', 'subagent', 'guarded view', 'CHOSE', 'WHY', 'REQUIRE_APPROVAL', '--include-values']) {
+      assert(body.includes(marker), `commands/kakashi-sweep.md is missing "${marker}"`);
+    }
+    assert(/never open original source files/i.test(body),
+      'commands/kakashi-sweep.md must forbid opening original source files');
+  });
+
+  check('installer carries sweep rule text for truncated-rule targets', () => {
+    const install = fs.readFileSync(path.join(ROOT, 'bin', 'install.js'), 'utf8');
+    assert(/SWEEP_RULE_NOTE/.test(install) && install.includes('kakashi sweep next'),
+      'bin/install.js is missing the sweep rule note');
+  });
+
   console.log(`orchestrator.test.js: ${passed} passed, ${failed} failed`);
   return failed === 0;
 }

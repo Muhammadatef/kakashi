@@ -8,7 +8,7 @@ package-lock.json.bak
 # Kakashi outputs
 # masked_*
 # *_masked.txt
-.kakashi/
+.kakashi/sweep/
 
 # Test artefacts
 # tests/fixtures/clean.txt

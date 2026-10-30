@@ -75,6 +75,19 @@ ${body}
 
 let opts = {};
 
+// Layer 4 Sweep rule text. The full rule (CLAUDE.md / kakashi-activate.md)
+// already carries the sweep dispatch row for every target that installs the
+// whole file. Targets that only receive a truncated excerpt (Continue's
+// systemMessage) get this short, self-contained summary appended so no agent
+// is left without the sweep contract.
+const SWEEP_RULE_NOTE = [
+  '[Kakashi Sweep] For "where does customer data / PII flow in this repo",',
+  'run `kakashi sweep <dir> --task "<intent>" --agent <id> --destination external_model --json`,',
+  'then loop `kakashi sweep next` -> read ONLY the guarded views listed -> write findings JSON ->',
+  '`kakashi sweep submit <batch_id> <file>`; never open original source files; then',
+  '`kakashi sweep reduce` and `kakashi sweep report -f md`. Exit 3 = stop and ask a human.',
+].join(' ');
+
 // Every slash command that ships in commands/ AND is safe to expose in the
 // agent's `/` picker. Adding to this list is a two-step contract:
 //   1. Ship the matching `commands/<name>.md` file (or `copySlashCommands`
@@ -94,6 +107,7 @@ const SLASH_CMDS = [
   'kakashi-db-audit',     // DB query results, human-only (WARN in agent)
   'kakashi-audit',        // one file, human-only (WARN in agent)
   'kakashi-agent-guard',  // loopback HTTP sidecar for MCP-enabled clients
+  'kakashi-sweep',        // Layer 4 Sweep: repo data-flow audit (next/submit worker loop)
   'kakashi-stats',        // cumulative counters
   'kakashi-list',         // active detection patterns
   'kakashi-impact',       // value-free adoption snapshot
@@ -179,7 +193,7 @@ function installContinue() {
   try {
     const config = JSON.parse(readFile(configPath));
     const body = readFile(path.join(ROOT, 'src', 'rules', 'kakashi-activate.md')) || '';
-    const note = `[Kakashi] ${body.slice(0, 500)}...`;
+    const note = `[Kakashi] ${body.slice(0, 500)}...\n\n${SWEEP_RULE_NOTE}`;
     if (!config.systemMessage || !config.systemMessage.includes('Kakashi')) {
       config.systemMessage = (config.systemMessage || '') + '\n\n' + note;
       if (!opts.dryRun) writeFile(configPath, JSON.stringify(config, null, 2));

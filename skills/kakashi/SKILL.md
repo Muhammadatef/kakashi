@@ -25,6 +25,7 @@ service, LLM API, or user outside this session:
 /kakashi-mask <file>       — Mask a file and show what was changed
 /kakashi-scan <file>       — Scan a file, report findings, don't write anything
 /kakashi-audit <file>      — Full audit: show original→masked mapping per finding
+/kakashi-sweep <dir>       — Layer 4 Sweep: repo data-flow audit (agent judges guarded views only)
 
 ## Important
 

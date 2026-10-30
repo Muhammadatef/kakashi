@@ -1,0 +1,37 @@
+- id: pii.dbt.pii_lineage
+  kind: dbt_graph
+  description: dbt models downstream of pii-tagged sources and the PII source declarations
+  rationale: Every model built from a PII source inherits its personal data unless explicitly hashed or aggregated.
+  sensitivity_class: CONTACT
+  evidence_kind: transform
+  languages: [sql, yaml]
+  query:
+    source_tags: [pii]
+    meta_keys: [pii, contains_pii]
+    emit: [source, model]
+  fixtures:
+    positive:
+      - path: dbt_fixture.json
+        text: '{"files": {"dbt_project.yml": "name: demo\nmodel-paths: [\"models\"]\n", "models/sources.yml": "version: 2\nsources:\n  - name: crm\n    tags: [pii]\n    tables:\n      - name: customers\n", "models/stg_customers.sql": "select email from {{ source(''crm'', ''customers'') }}\n"}, "target": "models/stg_customers.sql"}'
+    negative:
+      - path: dbt_fixture.json
+        text: '{"files": {"dbt_project.yml": "name: demo\nmodel-paths: [\"models\"]\n", "models/sources.yml": "version: 2\nsources:\n  - name: shop\n    tables:\n      - name: orders\n", "models/daily_orders.sql": "select count(*) from {{ source(''shop'', ''orders'') }}\n"}, "target": "models/daily_orders.sql"}'
+
+- id: pii.dbt.pii_exposure
+  kind: dbt_graph
+  description: dbt exposures (dashboards, exports, apps) that depend on PII models
+  rationale: An exposure is where PII leaves the warehouse to a consumer; it needs a lawful basis and a recipient record.
+  sensitivity_class: CONTACT
+  evidence_kind: expose
+  languages: [sql, yaml]
+  query:
+    source_tags: [pii]
+    meta_keys: [pii, contains_pii]
+    emit: [exposure]
+  fixtures:
+    positive:
+      - path: dbt_fixture.json
+        text: '{"files": {"dbt_project.yml": "name: demo\nmodel-paths: [\"models\"]\n", "models/schema.yml": "version: 2\nsources:\n  - name: crm\n    tags: [pii]\n    tables:\n      - name: customers\nexposures:\n  - name: crm_export\n    type: application\n    owner:\n      name: data team\n    depends_on:\n      - ref(''stg_customers'')\n", "models/stg_customers.sql": "select email from {{ source(''crm'', ''customers'') }}\n"}, "target": "models/schema.yml"}'
+    negative:
+      - path: dbt_fixture.json
+        text: '{"files": {"dbt_project.yml": "name: demo\nmodel-paths: [\"models\"]\n", "models/schema.yml": "version: 2\nsources:\n  - name: shop\n    tables:\n      - name: orders\nexposures:\n  - name: revenue_dash\n    type: dashboard\n    owner:\n      name: finance\n    depends_on:\n      - ref(''daily_orders'')\n", "models/daily_orders.sql": "select count(*) from {{ source(''shop'', ''orders'') }}\n"}, "target": "models/schema.yml"}'
