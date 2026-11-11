@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kakashi — hide what shouldn't leave your machine</title>
+<meta name="description" content="A local-first privacy engine for agentic AI. Finds secrets and personal data in files, folders and databases, and decides how much of it an agent may have. Zero network calls.">
+<meta property="og:image" content="og-card.png">
+<link rel="icon" href="logo-256.png">
+<style>
+:root{--bg:#f7f7f9;--card:#fff;--ink:#14171f;--mute:#5a6170;--line:#e3e5ea;--red:#cc0000;--code:#1c2030;--codeink:#e6e9f0;--ok:#2e8b57}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1117;--card:#171a23;--ink:#e8eaf0;--mute:#9aa2b2;--line:#262a36;--red:#ff4a4a;--code:#0b0d13;--codeink:#e6e9f0}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+a{color:var(--red)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+nav{position:sticky;top:0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);z-index:5}
+nav .wrap{display:flex;gap:18px;align-items:center;height:56px;overflow-x:auto;white-space:nowrap}
+nav a{color:var(--mute);text-decoration:none;font-size:14px}
+nav a:hover{color:var(--ink)}
+nav .brand{display:flex;gap:8px;align-items:center;color:var(--ink);font-weight:700;margin-right:auto}
+nav .brand img{width:26px;height:26px}
+header{padding:72px 0 48px;text-align:center}
+header img{width:110px;height:110px}
+h1{font-size:clamp(34px,6vw,56px);margin:12px 0 4px;letter-spacing:-.02em}
+.tag{font-size:clamp(18px,2.6vw,22px);color:var(--mute);margin:0 0 18px}
+.lede{max-width:680px;margin:0 auto 26px;font-size:18px}
+.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{padding:11px 20px;border-radius:8px;text-decoration:none;font-weight:600;border:1px solid var(--line);color:var(--ink);background:var(--card)}
+.btn.p{background:var(--red);color:#fff;border-color:var(--red)}
+.pills{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:22px}
+.pill{font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:99px;color:var(--mute)}
+section{padding:56px 0;border-top:1px solid var(--line)}
+h2{font-size:30px;margin:0 0 8px;letter-spacing:-.01em}
+h3{margin:28px 0 8px}
+.sub{color:var(--mute);margin:0 0 24px}
+pre{background:var(--code);color:var(--codeink);padding:16px 18px;border-radius:10px;overflow-x:auto;font:13.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;margin:12px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+p code,li code,td code{background:color-mix(in srgb,var(--red) 9%,transparent);padding:1px 5px;border-radius:4px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px}
+.card h3{margin:0 0 6px;font-size:18px}
+.card .n{color:var(--red);font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
+.card p{margin:6px 0 0;color:var(--mute);font-size:15px}
+video{width:100%;border-radius:12px;border:1px solid var(--line);background:#000}
+table{width:100%;border-collapse:collapse;font-size:14.5px;background:var(--card);border-radius:10px;overflow:hidden}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:13px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+tr:last-child td{border-bottom:0}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps>li{counter-increment:s;position:relative;padding-left:44px;margin-bottom:22px}
+.steps>li::before{content:counter(s);position:absolute;left:0;top:0;width:30px;height:30px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
+.callout{border-left:4px solid var(--red);background:var(--card);padding:14px 18px;border-radius:0 10px 10px 0;margin:16px 0}
+.tabs{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.tabs button{font:inherit;font-size:14px;padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--red);color:#fff;border-color:var(--red)}
+.tab{display:none}.tab.on{display:block}
+footer{padding:40px 0;text-align:center;color:var(--mute);font-size:14px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+<a class="brand" href="#"><img src="logo-256.png" alt="">kakashi</a>
+<a href="#problem">Problem</a><a href="#how">How it works</a><a href="#demos">Demos</a><a href="#use">How to use</a><a href="#docs">Docs</a><a href="https://github.com/Muhammadatef/kakashi">GitHub</a>
+</div></nav>
+
+<header class="wrap">
+<img src="logo-256.png" alt="Kakashi logo">
+<h1>kakashi</h1>
+<p class="tag">hide what shouldn't leave your machine</p>
+<p class="lede">A <strong>local-first privacy engine for agentic AI</strong>. It finds secrets and personal data in your files, folders and databases, and it can decide by itself how much of that data an agent may have for the job the agent says it's doing.</p>
+<div class="btns"><a class="btn p" href="#use">Get started</a><a class="btn" href="#demos">Watch the demo</a><a class="btn" href="https://github.com/Muhammadatef/kakashi">View on GitHub</a></div>
+<div class="pills"><span class="pill">Zero network calls</span><span class="pill">35 detection patterns</span><span class="pill">50+ file formats</span><span class="pill">20+ AI agents</span><span class="pill">6 databases</span><span class="pill">English · العربية</span><span class="pill">MIT</span></div>
+</header>
+
+<section id="problem"><div class="wrap">
+<h2>The problem</h2>
+<p class="sub">Every day, on every dev team, someone does this:</p>
+<pre># "Let me just ask Claude why this query is failing..."
+cat quarterly_report.xlsx | claude
+
+# "Cursor, fix the auth bug in this file"
+# (the file contains the production DB password)</pre>
+<p>Those files hold things that should never leave your machine: database connection strings, API keys, GitHub tokens, emails, phone numbers, card numbers, national IDs. There's no warning and no friction. <strong>They end up on a third-party server in plaintext, and you can't take them back.</strong></p>
+<div class="callout"><strong>The newer problem:</strong> agents now move data without asking first. They read files, query databases and call tools by themselves. "Remember to mask it" doesn't work as a control when nobody is at the keyboard.</div>
+<p>Kakashi sits between the file on your disk and the model on someone else's server. It runs completely on your machine: no daemon, no cloud, no telemetry.</p>
+</div></section>
+
+<section id="how"><div class="wrap">
+<h2>How it works: four layers</h2>
+<p class="sub">You can use each layer on its own, or let <code>/kakashi</code> pick the right one based on what you ask for.</p>
+<div class="grid">
+<div class="card"><div class="n">Layer 1 · Engine</div><h3>Find &amp; mask</h3><p>35 patterns (credentials, government IDs, financial, contact, names) across 50+ formats. Rebuilds the original file, so a <code>.docx</code> comes back as a real <code>.docx</code>.</p><p><code>scan</code> <code>mask</code> <code>audit</code></p></div>
+<div class="card"><div class="n">Layer 2 · Reach</div><h3>Folders &amp; databases</h3><p>Whole repos and shared drives get a PDPL-mapped compliance report. Live databases are queried and masked <strong>on your machine</strong>.</p><p><code>scan-dir</code> <code>mask-dir</code> <code>db-scan</code> <code>db-mask</code></p></div>
+<div class="card"><div class="n">Layer 3 · Guardian</div><h3>Autonomous guardrails</h3><p>Takes a file, an agent and a task. It assesses the risk, plans the <em>minimum necessary</em> protection, checks its own output again, and returns a decision.</p><p><code>guard</code> <code>agent-guard</code></p></div>
+<div class="card"><div class="n">Layer 4 · Sweep</div><h3>Where does customer data go?</h3><p>Repo-wide data-flow audit over SQL, dbt, Python, notebooks and Airflow. Kakashi runs the process and the LLM only judges. Workers never see raw PII.</p><p><code>sweep</code></p></div>
+</div>
+
+<h3>The Guardian loop</h3>
+<pre>GOAL   protect sensitive information while preserving task utility
+  ├─ OBSERVE          what is in this resource?        → 9 sensitivity classes
+  ├─ UNDERSTAND TASK  what does the agent need it for?  → per-class requirement
+  ├─ ASSESS           how risky is this release?         → 0–100, every factor named
+  ├─ PLAN             minimum necessary transform per class
+  ├─ POLICY           deterministic veto, so a rejected plan never runs
+  ├─ EXECUTE          write the protected artifact
+  ├─ VERIFY           re-scan its own output
+  └─ REPLAN           still unsafe? strengthen and loop (budget: 4)
+       ▼
+  ALLOW · ALLOW_WITH_TRANSFORMATION · REQUIRE_APPROVAL · BLOCK</pre>
+<div class="callout"><strong>The task can only add protection.</strong> The task string comes from the agent Kakashi is protecting data <em>from</em>, so Kakashi treats it as hostile input. No stated purpose can unlock plaintext, and leaving the purpose out <em>adds</em> risk points. A property test checks this across all 504 intent × class × tool combinations.</div>
+</div></section>
+
+<section id="demos"><div class="wrap">
+<h2>Demos</h2>
+<p class="sub">Watch the walkthrough, then run the same six demos on your own machine. They generate synthetic data and run fully offline.</p>
+<video src="Kakashi-Demo.mp4" controls preload="metadata" poster="og-card.png"></video>
+
+<h3>A real Guardian run</h3>
+<pre>$ kakashi guard employees.md --agent claude \
+    --task "calculate average salary by age group" --destination external_model
+
+OBSERVE      21 finding(s) across 6 data class(es)
+ASSESS       Risk: 95/100 — CRITICAL
+PLAN         CONTACT, FINANCIAL, GOV_ID, PERSON_NAME → stable tokens
+             LOCATION, QUASI_IDENTIFIER          → preserved (task needs them)
+VERIFY       PASS — 0 prohibited class(es) remain
+DECISION     ALLOW WITH TRANSFORMATION</pre>
+<p>Age bands and location are kept because the task can't be done without them. Salaries are tokenised <em>consistently</em>, so "group by" still works. The agent gets a file it can do the job with, and nothing beyond that.</p>
+<pre>$ kakashi guard service.env --agent unknown --destination external_model
+ASSESS       Risk: 100/100 — CRITICAL
+DECISION     REQUIRE HUMAN APPROVAL — awaiting approval for: CREDENTIAL
+             No artifact was written.</pre>
+<p>When it's unsure, it fails closed: nothing is written, and the output says why.</p>
+
+<h3>Run the demo kit</h3>
+<pre>git clone https://github.com/Muhammadatef/kakashi && cd kakashi
+npm install && npm test
+./demos/run-all.sh          # Windows: .\demos\run-all.ps1
+# → ALL 6 SELECTED DEMOS PASSED</pre>
+<div class="tw"><table>
+<tr><th>Script</th><th>Shows</th><th>Proves</th></tr>
+<tr><td><code>01-file-protection.sh</code></td><td>scan, audit, mask, stdin, typed/redact/fake, whitelist</td><td>Raw values disappear, and the masked output re-scans clean</td></tr>
+<tr><td><code>02-folder-compliance.sh</code></td><td>scan-dir, mask-dir, JSON/MD/HTML + Arabic report</td><td>Reports contain no values, and ignored files are honoured</td></tr>
+<tr><td><code>03-database-protection.sh</code></td><td>db-scan, db-audit, db-mask</td><td>Masking happens on your machine, and tokens stay stable across rows</td></tr>
+<tr><td><code>04-guardian-decision.sh</code></td><td>Risk, policy, verification, audit log</td><td>The decision is explicit, it fails closed, and the log has no values</td></tr>
+<tr><td><code>05-agent-sidecar.sh</code></td><td>agent-guard <code>/health</code> <code>/scan</code> <code>/mask</code></td><td>The loopback API returns only safe summaries</td></tr>
+<tr><td><code>06-operations-and-arabic.sh</code></td><td>list-patterns, Arabic CLI, stats, impact</td><td>Exported metrics contain no source data</td></tr>
+</table></div>
+<p>Sweep without an LLM: <code>node demos/sweep-mock-worker.js demos/sweep-bench</code></p>
+</div></section>
+
+<section id="use"><div class="wrap">
+<h2>How to use it</h2>
+<ol class="steps">
+<li><strong>Install</strong> (~30 s). It finds every AI agent on your machine and installs for all of them. Requires Node ≥ 18.
+<div class="tabs" role="tablist"><button aria-selected="true" data-t="i1">macOS / Linux</button><button aria-selected="false" data-t="i2">Windows</button><button aria-selected="false" data-t="i3">npm</button></div>
+<div class="tab on" id="i1"><pre>curl -fsSL https://raw.githubusercontent.com/Muhammadatef/kakashi/main/install.sh | bash
+# preview first:   ... | bash -s -- --dry-run
+# one agent only:  ... | bash -s -- --only cursor</pre></div>
+<div class="tab" id="i2"><pre>irm https://raw.githubusercontent.com/Muhammadatef/kakashi/main/install.ps1 | iex</pre></div>
+<div class="tab" id="i3"><pre>npm install -g @muhammadatef/kakashi
+# or straight from GitHub
+npx -y github:Muhammadatef/kakashi</pre></div>
+</li>
+<li><strong>Protect a file</strong>
+<pre>kakashi scan config/settings.py     # counts only, safe for agents to read
+kakashi mask config/settings.py     # → masked_settings.py
+kakashi mask file.env --mode redact # typed (default) | redact | fake</pre></li>
+<li><strong>Audit a folder</strong>
+<pre>kakashi scan-dir ./repo -f html -o compliance.html          # PDPL-mapped report
+kakashi scan-dir ./repo -f html -o compliance.html --lang ar  # Arabic
+kakashi mask-dir ./deliverables -r --ext xlsx,docx,csv</pre></li>
+<li><strong>Mask a database</strong> (Postgres, MySQL, MongoDB, Snowflake, Databricks, SQLite)
+<pre>kakashi db-scan "postgres://user:pass@host/db" -q "SELECT * FROM customers"
+kakashi db-mask "postgres://user:pass@host/db" -q "SELECT * FROM customers" -f csv -o safe.csv</pre></li>
+<li><strong>Let the Guardian decide</strong>
+<pre>kakashi guard employees.md --agent claude \
+  --task "calculate average salary by age group" --destination external_model
+kakashi guard data.csv --agent cursor --task "..." --json   # for agents: classes &amp; counts only</pre></li>
+<li><strong>Audit data flow across a repo</strong>
+<pre>kakashi sweep . --task "audit where customer data goes" --agent claude --destination external_model
+kakashi sweep next && kakashi sweep submit &lt;batch_id&gt; findings.json
+kakashi sweep reduce && kakashi sweep report -f md -o kakashi-sweep.md</pre></li>
+<li><strong>Or just ask your agent.</strong> In Claude, Cursor, Codex, Windsurf, Copilot and others:
+<pre>/kakashi check this file
+use kakashi to scan this repository
+kakashi can I send this report to Claude for a summary?</pre></li>
+</ol>
+<div class="callout"><strong>Inside an agent, pass a path, not an <code>@</code>-mention.</strong> <code>/kakashi-scan /path/to/file.env</code> keeps the file off the wire. An <code>@file.env</code> mention makes the agent attach the whole file to the model <em>before</em> Kakashi runs. <code>scan</code>, <code>db-scan</code> and <code>guard --json</code> are safe for agents to read. <code>audit</code>, <code>db-audit</code> and <code>--include-values</code> show plaintext on purpose.</div>
+
+<h3>Command reference</h3>
+<div class="tw"><table>
+<tr><th>Command</th><th>What it does</th></tr>
+<tr><td><code>scan &lt;file&gt;</code></td><td>Report counts only and write nothing (agent-safe)</td></tr>
+<tr><td><code>mask &lt;file&gt;</code></td><td>Mask and rebuild the original format</td></tr>
+<tr><td><code>audit &lt;file&gt;</code></td><td>Full original → token map (shows secrets)</td></tr>
+<tr><td><code>scan-dir</code> / <code>mask-dir</code></td><td>Recursive report / batch mask</td></tr>
+<tr><td><code>db-scan</code> / <code>db-mask</code> / <code>db-audit</code></td><td>The same for database query results</td></tr>
+<tr><td><code>guard &lt;file&gt;</code></td><td>Autonomous release decision</td></tr>
+<tr><td><code>agent-guard</code></td><td>Local loopback privacy sidecar</td></tr>
+<tr><td><code>sweep</code></td><td>Repo data-flow audit → PII source → sink chains</td></tr>
+<tr><td><code>stats</code> · <code>impact</code> · <code>list-patterns</code></td><td>Counters, value-free snapshot, all 35 patterns</td></tr>
+</table></div>
+<p>Global flags: <code>--mode typed|redact|fake</code>, <code>--whitelist</code>, <code>--output</code>, <code>--stdin</code>, <code>--lang en|ar</code>. Alias: <code>k</code>.</p>
+
+<h3>Upgrade &amp; uninstall</h3>
+<pre>npm install -g @muhammadatef/kakashi@latest
+curl -fsSL https://raw.githubusercontent.com/Muhammadatef/kakashi/main/install.sh | bash   # refresh agent rules
+
+npx -y github:Muhammadatef/kakashi -- --uninstall
+npm uninstall -g @muhammadatef/kakashi</pre>
+</div></section>
+
+<section id="docs"><div class="wrap">
+<h2>Documentation</h2>
+<p class="sub">The full guides are in the repository.</p>
+<div class="grid">
+<a class="card" style="text-decoration:none;color:inherit" href="https://github.com/Muhammadatef/kakashi#readme"><h3>README</h3><p>The full overview, every flag, and before/after examples.</p></a>
+<a class="card" style="text-decoration:none;color:inherit" href="https://github.com/Muhammadatef/kakashi/blob/main/INSTALL.md"><h3>Install guide</h3><p>Every platform, agent and install option.</p></a>
+<a class="card" style="text-decoration:none;color:inherit" href="https://github.com/Muhammadatef/kakashi/blob/main/docs/ARCHITECTURE.md"><h3>Architecture</h3><p>The engine, pattern registry and format handlers.</p></a>
+<a class="card" style="text-decoration:none;color:inherit" href="https://github.com/Muhammadatef/kakashi/blob/main/docs/AGENTIC_ARCHITECTURE.md"><h3>Agentic architecture</h3><p>Guardian internals: classes, risk, policy, replanning.</p></a>
+<a class="card" style="text-decoration:none;color:inherit" href="https://github.com/Muhammadatef/kakashi/blob/main/docs/SWEEP.md"><h3>Sweep guide</h3><p>Selectors, packs, PR mode and exit codes.</p></a>
+<a class="card" style="text-decoration:none;color:inherit" href="https://github.com/Muhammadatef/kakashi/blob/main/docs/DATABASE_GUIDE.md"><h3>Database guide</h3><p>Connection strings, drivers and limits.</p></a>
+<a class="card" style="text-decoration:none;color:inherit" href="https://github.com/Muhammadatef/kakashi/blob/main/docs/TECHNICAL_IMPLEMENTATION.md"><h3>Technical implementation</h3><p>The in-depth implementation write-up (also available as a PDF).</p></a>
+<a class="card" style="text-decoration:none;color:inherit" href="https://github.com/Muhammadatef/kakashi/blob/main/demos/PRESENTER_RUNBOOK.md"><h3>Presenter runbook</h3><p>A 12-minute live demo, script included.</p></a>
+<a class="card" style="text-decoration:none;color:inherit" href="https://github.com/Muhammadatef/kakashi/blob/main/CHANGELOG.md"><h3>Changelog</h3><p>Release notes.</p></a>
+</div>
+</div></section>
+
+<footer>
+<p><strong>kakashi never phones home.</strong> All scanning, masking and guarding runs in-process on your machine.</p>
+<p>MIT · built by <a href="https://github.com/Muhammadatef">@Muhammadatef</a> · <a href="https://www.npmjs.com/package/@muhammadatef/kakashi">npm</a></p>
+</footer>
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{const p=b.parentElement;p.querySelectorAll('button').forEach(x=>x.setAttribute('aria-selected',x===b));p.parentElement.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id===b.dataset.t))});
+</script>
+</body>
+</html>
